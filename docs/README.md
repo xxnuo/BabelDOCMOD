@@ -1,16 +1,15 @@
 YADT Spec
 ===
 
-# Structure
+## YADT Document Processing Markup Language
 
-- simplewpml.v1.rng: The markup language spec acting as a intermidate representation between the parse and the render.
+dpml.v1.rng: The definition of the markup language acting as a intermidate representation between the parse and the render.
 
-
-# Getting Started
+### An Example
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<wp:document xmlns:wp="urn:ns:yadt:simplewpml">
+<wp:document xmlns:wp="urn:ns:yadt:dpml">
     <wp:page>
         <!-- 标题段落 -->
         <wp:block offsetX="10%" offsetY="5%" width="80%" height="auto">
@@ -94,3 +93,55 @@ YADT Spec
     </wp:page>
 </wp:document>
 ```
+
+### Quick Reference
+
+#### Document Structure
+- `<wp:document>` - Root element
+  - `<wp:page>` - Page container
+    - `<wp:block>` - Content block container
+      - Attributes: `offsetX`, `offsetY`, `width`, `height` (all accept auto/percentage/units)
+
+#### Text Elements
+- `<wp:p>` - Paragraph
+  - Attributes: `align` (justify|center|right|start)
+  - `<wp:run>` - Text run with styling
+    - Attributes: `color`, `font-family`, `background-color`
+    - Can contain: text, `<wp:break>`, `<wp:symbol>`, `<wp:math>`
+  - `<wp:break>` - Line/page break
+    - Attributes: `type` (line|column)
+  - `<wp:math>` - Math expression (MathJax)
+  - `<wp:symbol>` - Special character/symbol
+    - Attributes: `src` (path to svg/png)
+
+#### Tables
+- `<wp:table>` - Table container
+  - Attributes: `frame`, `width`, `rowsep`, `colsep`, `framestyle*`
+  - `<wp:cols>` - Column definitions
+    - `<wp:col>` - Single column
+      - Attributes: `colwidth`
+  - `<wp:thead>` - Table header
+  - `<wp:tbody>` - Table body
+    - `<wp:tr>` - Table row
+      - `<wp:td>` - Table cell
+        - Attributes: `align`, `colspan`, `rowspan`, `borderstyle*`, `bordercolor*`, `shade`
+
+#### Objects
+- `<wp:object>` - Special content container
+  - `<wp:figure>` - Image/figure
+    - Attributes: `src`, `width`, `height`, `caption`, `title`
+  - `<wp:codeblock>` - Code block
+    - Attributes: `language`
+    - `<wp:codeline>` - Code line
+      - Attributes: `number`, `highlight`
+
+#### Common Attributes
+- Measurements: Accept `auto`, percentages (e.g. "50%"), or units (pt|pc|mm|cm|in|em|px)
+- Colors: 6-digit hex RGB (e.g. "FF0000" for red)
+- Border styles: `single|double|dotted|dashed|none`
+
+#### Example Usage
+See the example above for practical implementation of these elements.
+
+
+

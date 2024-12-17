@@ -2,13 +2,13 @@
 <grammar
     xmlns="http://relaxng.org/ns/structure/1.0"
     xmlns:a="http://relaxng.org/ns/compatibility/annotations/1.0"
-    xmlns:wp="urn:ns:yadt:simplewpml"
+    xmlns:wp="urn:ns:yadt:dpml"
     datatypeLibrary="http://www.w3.org/2001/XMLSchema-datatypes">
     <start>
         <ref name="document" />
     </start>
     <define name="document">
-        <element name="document" ns="urn:ns:yadt:simplewpml">
+        <element name="document" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>Root of a document.</p>
             </a:documentation>
@@ -16,7 +16,7 @@
         </element>
     </define>
     <define name="page">
-        <element name="page" ns="urn:ns:yadt:simplewpml">
+        <element name="page" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>A page.</p>
             </a:documentation>
@@ -58,7 +58,7 @@
         </choice>
     </define>
     <define name="p">
-        <element name="p" ns="urn:ns:yadt:simplewpml">
+        <element name="p" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>A block of text organized into one or more runs or nested tables or objects.</p>
             </a:documentation>
@@ -85,7 +85,7 @@
         </element>
     </define>
     <define name="run">
-        <element name="run" ns="urn:ns:yadt:simplewpml">
+        <element name="run" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>A sequence of one or more characters to which a specific style is applied.
                     May contain inline elements such as bookmarks, symbols, etc.
@@ -125,11 +125,9 @@
         </element>
     </define>
     <define name="break">
-        <element name="break" ns="urn:ns:yadt:simplewpml">
+        <element name="break" ns="urn:ns:yadt:dpml">
             <a:documentation>
-                <p>Represents a literal break point: line, column, or page.</p>
-                <p>The value "textWrapping" is from the Microsoft specification and is
-                    the same as "line".</p>
+                <p>Represents a literal break point: line, column</p>
             </a:documentation>
             <empty />
             <optional>
@@ -137,15 +135,13 @@
                     <choice>
                         <value>line</value>
                         <value>column</value>
-                        <value>page</value>
-                        <value>textWrapping</value>
                     </choice>
                 </attribute>
             </optional>
         </element>
     </define>
     <define name="symbol">
-        <element name="symbol" ns="urn:ns:yadt:simplewpml">
+        <element name="symbol" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>a simple as special character which can be distinguished by specific parser</p>
             </a:documentation>
@@ -157,7 +153,7 @@
         </element>
     </define>
     <define name="math">
-        <element name="math" ns="urn:ns:yadt:simplewpml">
+        <element name="math" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>a math expression usually expressed in mathjax</p>
             </a:documentation>
@@ -165,7 +161,7 @@
         </element>
     </define>
     <define name="table">
-        <element name="table" ns="urn:ns:yadt:simplewpml">
+        <element name="table" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>Represents tabular data, i.e., rows and columns.</p>
                 <p><b>NOTE:</b> Row spanning requires that all cells in the vertically-spanned
@@ -274,7 +270,7 @@
     </define>
 
     <define name="cols">
-        <element name="cols" ns="urn:ns:yadt:simplewpml">
+        <element name="cols" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>Holds the column definitions for a table.</p>
             </a:documentation>
@@ -285,7 +281,7 @@
     </define>
 
     <define name="col">
-        <element name="col" ns="urn:ns:yadt:simplewpml">
+        <element name="col" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>Defines a single column within a table.</p>
             </a:documentation>
@@ -303,7 +299,7 @@
     </define>
 
     <define name="thead">
-        <element name="thead" ns="urn:ns:yadt:simplewpml">
+        <element name="thead" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>Contains the header rows for a table.</p>
             </a:documentation>
@@ -314,7 +310,7 @@
     </define>
 
     <define name="tbody">
-        <element name="tbody" ns="urn:ns:yadt:simplewpml">
+        <element name="tbody" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>Contains the body rows for a table.</p>
             </a:documentation>
@@ -325,7 +321,7 @@
     </define>
 
     <define name="tr">
-        <element name="tr" ns="urn:ns:yadt:simplewpml">
+        <element name="tr" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>A row within a table head or table body.</p>
             </a:documentation>
@@ -336,7 +332,7 @@
     </define>
 
     <define name="td">
-        <element name="td" ns="urn:ns:yadt:simplewpml">
+        <element name="td" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>A cell within a table row. Cells can consist of just runs and run content or
                     multiple paragraphs or objects.</p>
@@ -514,7 +510,7 @@
         </element>
     </define>
     <define name="vspan">
-        <element name="vspan" ns="urn:ns:yadt:simplewpml">
+        <element name="vspan" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>For use within &lt;td&gt;, marks a cell as being the continuation of a
                     vertically-spanned set of cells.</p>
@@ -559,7 +555,7 @@
         </data>    
     </define> 
     <define name="object">
-        <element name="object" ns="urn:ns:yadt:simplewpml">
+        <element name="object" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>Represents an special block of content</p>
             </a:documentation>
@@ -572,7 +568,7 @@
         </element>
     </define>
     <define name="figure">
-        <element name="figure" ns="urn:ns:yadt:simplewpml">
+        <element name="figure" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>Represents a figure, a base64 encoded image if src is not provided</p>
             </a:documentation>
@@ -615,7 +611,7 @@
         </element>
     </define>
     <define name="codeblock">
-        <element name="codeblock" ns="urn:ns:yadt:simplewpml">
+        <element name="codeblock" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>Represents a code block</p>
             </a:documentation>
@@ -633,7 +629,7 @@
     </define>
 
     <define name="codeline">
-        <element name="codeline" ns="urn:ns:yadt:simplewpml">
+        <element name="codeline" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>Represents a single line in a code block</p>
             </a:documentation>
