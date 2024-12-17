@@ -18,8 +18,9 @@ const App = () => {
   const canvasRef = useRef(null);
 
   // Configs
-  const modelName = "doclayout_yolo_docstructbench_imgsz1024.onnx";
-  const modelInputShape = [1, 3, 1024, 1024];
+  const modelName = "best.onnx";
+  // const modelName = "doclayout_yolo_docstructbench_imgsz1024.onnx";
+  const modelInputShape = [1, 3, 640, 640];
   const scoreThreshold = 0.2;
 
   useEffect(() => {
@@ -69,7 +70,7 @@ const App = () => {
         </div>
       )}
       <div className="header">
-        <h1>DocLayout Detection App</h1>
+        <h1>Image Translator In Device</h1>
         <p>
           Serving : <code className="code">{modelName}</code>
         </p>

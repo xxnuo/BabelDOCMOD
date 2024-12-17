@@ -1,12 +1,3 @@
   [
-    "titel",
-    "plain text",
-    "abandon",
-    "figure",
-    "figure_caption",
-    "table",
-    "table_caption",
-    "table_footnote",
-    "isolate_formula",
-    "formula_caption"
+    "textbox"
   ]
