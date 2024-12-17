@@ -1,4 +1,4 @@
-Yet Another PDF Translator
+Yet Another Document Translator
 ===
 
 ## Background
