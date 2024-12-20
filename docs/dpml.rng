@@ -12,7 +12,9 @@
             <a:documentation>
                 <p>Root of a document.</p>
             </a:documentation>
-            <ref name="page" />
+            <oneOrMore>
+                <ref name="page" />
+            </oneOrMore>
         </element>
     </define>
     <define name="page">
