@@ -22,15 +22,127 @@
             <a:documentation>
                 <p>A page.</p>
             </a:documentation>
+            <ref name="page-properties" />
             <zeroOrMore>
                 <ref name="block" />
             </zeroOrMore>
         </element>
     </define>
+    <define name="page-properties">
+        <element name="page-properties" ns="urn:ns:yadt:dpml">
+            <a:documentation>
+                <p>Defines the page properties for the pages in the section.</p>
+            </a:documentation>
+            <ref name="page-margins" />
+            <ref name="page-size" />
+        </element>
+    </define>
+    <define name="page-margins">
+        <element name="page-margins" ns="urn:ns:yadt:dpml">
+            <a:documentation>
+                <p>Defines the page margins for the pages in the section.</p>
+            </a:documentation>
+            <optional>
+                <attribute name="bottom">
+                    <a:documentation>
+                        <p>The the distance between the bottom of the text margins
+                            for the main document and the bottom of the page.</p>
+                    </a:documentation>
+                    <ref name="auto-percentage-measurement" />
+                </attribute>
+            </optional>
+            <optional>
+                <attribute name="left">
+                    <a:documentation>
+                        <p>The the distance between the left edge of the page and
+                            the left edge of the text extents.</p>
+                    </a:documentation>
+                </attribute>
+            </optional>
+            <optional>
+                <attribute name="right">
+                    <a:documentation>
+                        <p>The the distance between the right edge of the page and
+                            the right edge of the text extents.</p>
+                    </a:documentation>
+                    <ref name="auto-percentage-measurement" />
+                </attribute>
+            </optional>
+            <optional>
+                <attribute name="top">
+                    <a:documentation>
+                        <p>The the distance between the top edge of the page and
+                            the top edge of the text extents.</p>
+                    </a:documentation>
+                </attribute>
+            </optional>
+        </element>
+    </define>
+    <define name="page-size">
+        <element name="page-size" ns="urn:ns:yadt:dpml">
+            <a:documentation>
+                <p>Defines the page geometry details.</p>
+            </a:documentation>
+            <optional>
+                <attribute name="code">
+                    <a:documentation>
+                        <p>The printer paper code. This code is stored solely to show a description
+                            for the current paper size.</p>
+                    </a:documentation>
+                </attribute>
+            </optional>
+            <optional>
+                <attribute name="orient">
+                    <a:documentation>
+                        <p>Specifies the orientation of all pages in this page.</p>
+                    </a:documentation>
+                    <choice>
+                        <value>portrait</value>
+                        <value>landscape</value>
+                    </choice>
+                </attribute>
+            </optional>
+            <ref name="width-height-atts" />
+        </element>
+    </define>
+        <define name="width-height-atts">
+        <optional>
+            <attribute name="width">
+                <a:documentation>
+                    <p>The width in some unit. If no units are provided then the unit is pixels.</p>
+                    <p>Unit support is processor dependent but processors should support at least:</p>
+                    <ul>
+                        <li>px - pixels</li>
+                        <li>pt - points (72/inch)</li>
+                        <li>in - inches</li>
+                        <li>pc - picas (6/inch)</li>
+                        <li>mm - millimeters</li>
+                        <li>cm - centimeters</li>
+                    </ul>
+                </a:documentation>
+            </attribute>
+        </optional>
+        <optional>
+            <attribute name="height">
+                <a:documentation>
+                    <p>The height in some unit. If no units are provided then the unit is pixels.</p>
+                    <p>Unit support is processor dependent but processors should support at least:</p>
+                    <ul>
+                        <li>px - pixels</li>
+                        <li>pt - points (72/inch)</li>
+                        <li>in - inches</li>
+                        <li>pc - picas (6/inch)</li>
+                        <li>mm - millimeters</li>
+                        <li>cm - centimeters</li>
+                    </ul>
+                </a:documentation>
+            </attribute>
+        </optional>
+    </define>
     <define name="block-attributes">
         <optional>
             <attribute name="offsetX">
-                <a:documentation>  
+                <a:documentation>
                     <p>The relative position of the block in the page</p>
                 </a:documentation>
                 <ref name="auto-percentage-measurement" />
@@ -38,7 +150,7 @@
         </optional>
         <optional>
             <attribute name="offsetY">
-                <a:documentation>  
+                <a:documentation>
                     <p>The relative position of the block in the page</p>
                 </a:documentation>
                 <ref name="auto-percentage-measurement" />
@@ -46,15 +158,15 @@
         </optional>
         <optional>
             <attribute name="width">
-                <a:documentation>  
+                <a:documentation>
                     <p>The relative width of the block in the page</p>
                 </a:documentation>
                 <ref name="auto-percentage-measurement" />
             </attribute>
         </optional>
         <optional>
-            <attribute name="height"> 
-                <a:documentation>  
+            <attribute name="height">
+                <a:documentation>
                     <p>The relative height of the block in the page</p>
                 </a:documentation>
                 <ref name="auto-percentage-measurement" />
@@ -81,7 +193,7 @@
                     <ref name="run" />
                 </choice>
             </oneOrMore>
-            <ref name="block-attributes"/>
+            <ref name="block-attributes" />
             <optional>
                 <attribute name="align">
                     <a:documentation>
@@ -117,9 +229,10 @@
             <optional>
                 <attribute name="color">
                     <a:documentation>
-                        <p>Set foreground color. Must be a 6-digit hex RGB color value, e.g. "C0C0C0".</p>
+                        <p>Set foreground color. Must be a 6-digit hex RGB color value, e.g.
+                            "C0C0C0".</p>
                     </a:documentation>
-                    <ref name="hexcolor"/>
+                    <ref name="hexcolor" />
                 </attribute>
             </optional>
             <optional>
@@ -134,7 +247,7 @@
                     <a:documentation>
                         <p>Set background color for the run. Must be a 6-digit hex RGB color value.</p>
                     </a:documentation>
-                    <ref name="hexcolor"/>
+                    <ref name="hexcolor" />
                 </attribute>
             </optional>
         </element>
@@ -182,7 +295,7 @@
                 <p><b>NOTE:</b> Row spanning requires that all cells in the vertically-spanned
                     columns be present in the markup. See td element for details.</p>
             </a:documentation>
-            <ref name="block-attributes"/>
+            <ref name="block-attributes" />
             <optional>
                 <ref name="cols" />
             </optional>
@@ -559,15 +672,15 @@
         </a:documentation>
         <data type="string">
             <param name="pattern">auto|(\+|\-)?[0-9]+(\.[0-9]+)?(pt|pc|mm|cm|in|em|px|%)</param>
-        </data>    
-    </define> 
+        </data>
+    </define>
     <define name="object">
         <element name="object" ns="urn:ns:yadt:dpml">
             <a:documentation>
                 <p>Represents an special block of content</p>
             </a:documentation>
-            <ref name="block-attributes"/>
-            <oneOrMore>  
+            <ref name="block-attributes" />
+            <oneOrMore>
                 <choice>
                     <ref name="figure" />
                     <ref name="codeblock" />
@@ -590,13 +703,13 @@
                     </a:documentation>
                 </attribute>
                 <attribute name="width">
-                    <a:documentation>  
+                    <a:documentation>
                         <p>the width of the figure</p>
                     </a:documentation>
                     <ref name="auto-percentage-measurement" />
                 </attribute>
-                <attribute name="height">  
-                    <a:documentation>  
+                <attribute name="height">
+                    <a:documentation>
                         <p>the height of the figure</p>
                     </a:documentation>
                     <ref name="auto-percentage-measurement" />
@@ -612,7 +725,8 @@
             <optional>
                 <attribute name="title">
                     <a:documentation>
-                        <p>A brief title or alternative text for the figure, important for accessibility</p>
+                        <p>A brief title or alternative text for the figure, important for
+                            accessibility</p>
                     </a:documentation>
                 </attribute>
             </optional>
@@ -623,7 +737,7 @@
             <a:documentation>
                 <p>Represents a code block</p>
             </a:documentation>
-            <optional> 
+            <optional>
                 <attribute name="language">
                     <a:documentation>
                         <p>the language of the code block</p>

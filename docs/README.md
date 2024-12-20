@@ -11,6 +11,19 @@ dpml.v1.rng: The definition of the markup language acting as a intermidate repre
 <?xml version="1.0" encoding="UTF-8"?>
 <wp:document xmlns:wp="urn:ns:yadt:dpml">
     <wp:page>
+        <wp:page-properties>
+            <wp:page-margins 
+                top="2.54cm"
+                bottom="2.54cm" 
+                left="3.18cm"
+                right="3.18cm"/>
+            <wp:page-size 
+                width="21cm"
+                height="29.7cm"
+                orient="portrait"
+                code="A4"/>
+        </wp:page-properties>
+        
         <!-- 标题段落 -->
         <wp:block offsetX="10%" offsetY="5%" width="80%" height="auto">
             <wp:p align="center">
@@ -99,6 +112,9 @@ dpml.v1.rng: The definition of the markup language acting as a intermidate repre
 #### Document Structure
 - `<wp:document>` - Root element
   - `<wp:page>` - Page container
+    - `<wp:page-properties>` - Page configuration
+      - `<wp:page-margins>` - Page margins (top, bottom, left, right)
+      - `<wp:page-size>` - Page dimensions and orientation
     - `<wp:block>` - Content block container
       - Attributes: `offsetX`, `offsetY`, `width`, `height` (all accept auto/percentage/units)
 
@@ -142,6 +158,33 @@ dpml.v1.rng: The definition of the markup language acting as a intermidate repre
 
 #### Example Usage
 See the example above for practical implementation of these elements.
+
+### Example Page Configuration
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<wp:document xmlns:wp="urn:ns:yadt:dpml">
+    <wp:page>
+        <wp:page-properties>
+            <wp:page-margins 
+                top="2.54cm"
+                bottom="2.54cm" 
+                left="3.18cm"
+                right="3.18cm"/>
+            <wp:page-size 
+                width="21cm"
+                height="29.7cm"
+                orient="portrait"
+                code="A4"/>
+        </wp:page-properties>
+        
+        <!-- Content blocks go here -->
+        <wp:block offsetX="10%" offsetY="5%" width="80%" height="auto">
+            <!-- Block content -->
+        </wp:block>
+    </wp:page>
+</wp:document>
+```
 
 
 
