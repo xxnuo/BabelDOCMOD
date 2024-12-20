@@ -22,37 +22,49 @@
             <a:documentation>
                 <p>A page.</p>
             </a:documentation>
-            <ref name="block" />
+            <zeroOrMore>
+                <ref name="block" />
+            </zeroOrMore>
         </element>
+    </define>
+    <define name="block-attributes">
+        <optional>
+            <attribute name="offsetX">
+                <a:documentation>  
+                    <p>The relative position of the block in the page</p>
+                </a:documentation>
+                <ref name="auto-percentage-measurement" />
+            </attribute>
+        </optional>
+        <optional>
+            <attribute name="offsetY">
+                <a:documentation>  
+                    <p>The relative position of the block in the page</p>
+                </a:documentation>
+                <ref name="auto-percentage-measurement" />
+            </attribute>
+        </optional>
+        <optional>
+            <attribute name="width">
+                <a:documentation>  
+                    <p>The relative width of the block in the page</p>
+                </a:documentation>
+                <ref name="auto-percentage-measurement" />
+            </attribute>
+        </optional>
+        <optional>
+            <attribute name="height"> 
+                <a:documentation>  
+                    <p>The relative height of the block in the page</p>
+                </a:documentation>
+                <ref name="auto-percentage-measurement" />
+            </attribute>
+        </optional>
     </define>
     <define name="block">
         <a:documentation>
             <p>The content of a page.</p>
         </a:documentation>
-        <attribute name="offsetX">
-            <a:documentation>  
-                <p>The relative position of the block in the page</p>
-            </a:documentation>
-            <ref name="auto-percentage-measurement" />
-        </attribute>
-        <attribute name="offsetY">
-            <a:documentation>  
-                <p>The relative position of the block in the page</p>
-            </a:documentation>
-            <ref name="auto-percentage-measurement" />
-        </attribute>
-        <attribute name="width">
-            <a:documentation>  
-                <p>The relative width of the block in the page</p>
-            </a:documentation>
-            <ref name="auto-percentage-measurement" />
-        </attribute>
-        <attribute name="height"> 
-            <a:documentation>  
-                <p>The relative height of the block in the page</p>
-            </a:documentation>
-            <ref name="auto-percentage-measurement" />
-        </attribute>
         <choice>
             <ref name="p" />
             <ref name="table" />
@@ -69,6 +81,7 @@
                     <ref name="run" />
                 </choice>
             </oneOrMore>
+            <ref name="block-attributes"/>
             <optional>
                 <attribute name="align">
                     <a:documentation>
@@ -169,6 +182,7 @@
                 <p><b>NOTE:</b> Row spanning requires that all cells in the vertically-spanned
                     columns be present in the markup. See td element for details.</p>
             </a:documentation>
+            <ref name="block-attributes"/>
             <optional>
                 <ref name="cols" />
             </optional>
@@ -193,15 +207,6 @@
                         <value>top</value>
                         <value>none</value>
                     </choice>
-                </attribute>
-            </optional>
-            <optional>
-                <attribute name="width">
-                    <a:documentation>
-                        <p>The width value to use, either the keyword "auto", a percentage, or an
-                            absolute measurement.</p>
-                    </a:documentation>
-                    <ref name="auto-percentage-measurement" />
                 </attribute>
             </optional>
             <optional>
@@ -561,6 +566,7 @@
             <a:documentation>
                 <p>Represents an special block of content</p>
             </a:documentation>
+            <ref name="block-attributes"/>
             <oneOrMore>  
                 <choice>
                     <ref name="figure" />
