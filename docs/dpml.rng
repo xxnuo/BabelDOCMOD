@@ -12,9 +12,18 @@
             <a:documentation>
                 <p>Root of a document.</p>
             </a:documentation>
+            <ref name="document-properties" />
             <oneOrMore>
                 <ref name="page" />
+                <ref name="pdfobject" />
             </oneOrMore>
+        </element>
+    </define>
+    <define name="document-properties">
+        <element name="document-properties" ns="urn:ns:yadt:dpml">
+            <a:documentation>
+                <p>The properties of the document.</p>
+            </a:documentation>
         </element>
     </define>
     <define name="page">
@@ -684,6 +693,7 @@
                 <choice>
                     <ref name="figure" />
                     <ref name="codeblock" />
+                    <ref name="pdfobject" />
                 </choice>
             </oneOrMore>
         </element>
@@ -775,6 +785,64 @@
                     </choice>
                 </attribute>
             </optional>
+        </element>
+    </define>
+    <define name="pdfobject">
+        <element name="pdfobject" ns="urn:ns:yadt:dpml">
+            <a:documentation>
+                <p>Represents a pdf object</p>
+            </a:documentation>
+            <attribute name="objectNumber">
+                <a:documentation>
+                    <p>The object number</p>
+                </a:documentation>
+            </attribute>
+            <attribute name="generationNumber">
+                <a:documentation>
+                    <p>The generation number</p>
+                </a:documentation>
+            </attribute>
+            <oneOrMore>
+                <ref name="keyValuePair" />
+            </oneOrMore>
+        </element>
+    </define>
+    <define name="keyValuePair">
+        <element name="keyValuePair" ns="urn:ns:yadt:dpml">
+            <a:documentation>
+                <p>Represents a key-value pair in JSON-like structure</p>
+            </a:documentation>
+            <attribute name="key">
+                <a:documentation>
+                    <p>The key of the pair</p>
+                </a:documentation>
+            </attribute>
+            <choice>
+                <!-- Simple value as attribute -->
+                <optional>
+                    <attribute name="value">
+                        <a:documentation>
+                            <p>The value for primitive types (string, number, boolean, null)</p>
+                        </a:documentation>
+                    </attribute>
+                </optional>
+                <!-- Complex values as child elements -->
+                <optional>
+                    <choice>
+                        <zeroOrMore>
+                            <ref name="keyValuePair"/>  <!-- For nested objects -->
+                        </zeroOrMore>
+                        <zeroOrMore>
+                            <element name="arrayItem" ns="urn:ns:yadt:dpml">  <!-- For arrays -->
+                                <choice>
+                                    <attribute name="value"/>  <!-- For primitive array items -->
+                                    <ref name="keyValuePair"/>  <!-- For complex array items -->
+                                </choice>
+                            </element>
+                        </zeroOrMore>
+                    </choice>
+                </optional>
+            </choice>
         </element>
     </define>
 </grammar>
