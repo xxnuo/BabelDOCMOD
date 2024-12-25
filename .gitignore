@@ -11,3 +11,8 @@ web/node_modules
 web/dist
 web/dist-ssr
 web/*.local
+
+**/*.so
+*.pdf
+*.json
+**/*.pyc
