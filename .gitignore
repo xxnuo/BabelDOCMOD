@@ -16,3 +16,4 @@ web/*.local
 *.pdf
 *.json
 **/*.pyc
+.venv
