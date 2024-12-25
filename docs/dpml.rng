@@ -24,6 +24,13 @@
             <a:documentation>
                 <p>The properties of the document.</p>
             </a:documentation>
+            <optional>
+                <attribute name="pdf">
+                    <a:documentation>
+                        <p>The path to the PDF file.</p>
+                    </a:documentation>
+                </attribute>
+            </optional>
         </element>
     </define>
     <define name="page">
@@ -792,6 +799,16 @@
             <a:documentation>
                 <p>Represents a pdf object</p>
             </a:documentation>
+            <attribute name="type">
+                <a:documentation>
+                    <p>The type of the pdf object</p>
+                </a:documentation>
+                <choice>
+                    <value>obj</value>
+                    <value>trailer</value>
+                    <value>metadata</value>
+                </choice>
+            </attribute>
             <attribute name="objectNumber">
                 <a:documentation>
                     <p>The object number</p>
