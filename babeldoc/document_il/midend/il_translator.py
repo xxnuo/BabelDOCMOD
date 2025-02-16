@@ -3,6 +3,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from typing import List, Union
 
 from tqdm import tqdm
 
