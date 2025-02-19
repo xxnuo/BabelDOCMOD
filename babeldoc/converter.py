@@ -2,14 +2,18 @@ import base64
 import logging
 import re
 import unicodedata
+from collections.abc import Sequence
+from typing import cast
 
 import numpy as np
 from pdfminer.converter import PDFConverter
 from pdfminer.layout import LTChar
 from pdfminer.layout import LTComponent
+from pdfminer.layout import LTCurve
 from pdfminer.layout import LTFigure
 from pdfminer.layout import LTLine
 from pdfminer.layout import LTPage
+from pdfminer.layout import LTRect
 from pdfminer.layout import LTText
 from pdfminer.pdfcolor import PDFColorSpace
 from pdfminer.pdffont import PDFCIDFont
@@ -18,6 +22,8 @@ from pdfminer.pdffont import PDFUnicodeNotDefined
 from pdfminer.pdfinterp import PDFGraphicState
 from pdfminer.pdfinterp import PDFResourceManager
 from pdfminer.utils import Matrix
+from pdfminer.utils import PathSegment
+from pdfminer.utils import Point
 from pdfminer.utils import apply_matrix_pt
 from pdfminer.utils import bbox2str
 from pdfminer.utils import matrix2str
@@ -119,6 +125,133 @@ class PDFConverterEx(PDFConverter):
         item.cid = cid  # hack 插入原字符编码
         item.font = font  # hack 插入原字符字体
         return item.adv
+
+    def paint_path(
+        self,
+        gstate: PDFGraphicState,
+        stroke: bool,
+        fill: bool,
+        evenodd: bool,
+        path: Sequence[PathSegment],
+        graphicstate: PDFGraphicState,
+    ) -> None:
+        """Paint paths described in section 4.4 of the PDF reference manual"""
+        shape = "".join(x[0] for x in path)
+
+        if shape[:1] != "m":
+            # Per PDF Reference Section 4.4.1, "path construction operators may
+            # be invoked in any sequence, but the first one invoked must be m
+            # or re to begin a new subpath." Since pdfminer.six already
+            # converts all `re` (rectangle) operators to their equivelent
+            # `mlllh` representation, paths ingested by `.paint_path(...)` that
+            # do not begin with the `m` operator are invalid.
+            pass
+
+        elif shape.count("m") > 1:
+            # recurse if there are multiple m's in this shape
+            for m in re.finditer(r"m[^m]+", shape):
+                subpath = path[m.start(0) : m.end(0)]
+                self.paint_path(gstate, stroke, fill, evenodd, subpath, graphicstate)
+
+        else:
+            # Although the 'h' command does not not literally provide a
+            # point-position, its position is (by definition) equal to the
+            # subpath's starting point.
+            #
+            # And, per Section 4.4's Table 4.9, all other path commands place
+            # their point-position in their final two arguments. (Any preceding
+            # arguments represent control points on Bézier curves.)
+            raw_pts = [
+                cast(Point, p[-2:] if p[0] != "h" else path[0][-2:]) for p in path
+            ]
+            pts = [apply_matrix_pt(self.ctm, pt) for pt in raw_pts]
+
+            operators = [str(operation[0]) for operation in path]
+            transformed_points = [
+                [
+                    apply_matrix_pt(self.ctm, (float(operand1), float(operand2)))
+                    for operand1, operand2 in zip(
+                        operation[1::2],
+                        operation[2::2],
+                        strict=False,
+                    )
+                ]
+                for operation in path
+            ]
+            transformed_path = [
+                cast(PathSegment, (o, *p))
+                for o, p in zip(operators, transformed_points, strict=False)
+            ]
+
+            if shape in {"mlh", "ml"}:
+                # single line segment
+                #
+                # Note: 'ml', in conditional above, is a frequent anomaly
+                # that we want to support.
+                line = LTLine(
+                    gstate.linewidth,
+                    pts[0],
+                    pts[1],
+                    stroke,
+                    fill,
+                    evenodd,
+                    gstate.scolor,
+                    gstate.ncolor,
+                    original_path=transformed_path,
+                    dashing_style=gstate.dash,
+                )
+                line.graphicstate = graphicstate
+                self.cur_item.add(line)
+
+            elif shape in {"mlllh", "mllll"}:
+                (x0, y0), (x1, y1), (x2, y2), (x3, y3), _ = pts
+
+                is_closed_loop = pts[0] == pts[4]
+                has_square_coordinates = (
+                    x0 == x1 and y1 == y2 and x2 == x3 and y3 == y0
+                ) or (y0 == y1 and x1 == x2 and y2 == y3 and x3 == x0)
+                if is_closed_loop and has_square_coordinates:
+                    rect = LTRect(
+                        gstate.linewidth,
+                        (*pts[0], *pts[2]),
+                        stroke,
+                        fill,
+                        evenodd,
+                        gstate.scolor,
+                        gstate.ncolor,
+                        transformed_path,
+                        gstate.dash,
+                    )
+                    rect.graphicstate = graphicstate
+                    self.cur_item.add(rect)
+                else:
+                    curve = LTCurve(
+                        gstate.linewidth,
+                        pts,
+                        stroke,
+                        fill,
+                        evenodd,
+                        gstate.scolor,
+                        gstate.ncolor,
+                        transformed_path,
+                        gstate.dash,
+                    )
+                    curve.graphicstate = graphicstate
+                    self.cur_item.add(curve)
+            else:
+                curve = LTCurve(
+                    gstate.linewidth,
+                    pts,
+                    stroke,
+                    fill,
+                    evenodd,
+                    gstate.scolor,
+                    gstate.ncolor,
+                    transformed_path,
+                    gstate.dash,
+                )
+                curve.graphicstate = graphicstate
+                self.cur_item.add(curve)
 
 
 class AWLTChar(LTChar):
@@ -384,6 +517,10 @@ class TranslateConverter(PDFConverterEx):
                     vlstk.append(child)
                 else:                           # 全局线条
                     lstk.append(child)
+            elif isinstance(child, LTCurve):
+                pass
+            elif isinstance(child, LTRect):
+                pass
             else:
                 pass
         return

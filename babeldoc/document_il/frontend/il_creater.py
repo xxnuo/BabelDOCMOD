@@ -34,12 +34,19 @@ class ILCreater:
         self.xobj_inc = 0
         self.xobj_map: dict[int, il_version_1.PdfXobject] = {}
         self.xobj_stack = []
+        color_pattern = r"sc|scn|g|rg|k|cs|gs|ri"
+        line_pattern = r"w|j|M|d|i"
+
+        self.PASSTHROUGH_PER_CHAR_PATTERN = re.compile(
+            f"^({color_pattern}|{line_pattern})$",
+            re.IGNORECASE,
+        )
 
     def on_finish(self):
         self.progress.__exit__(None, None, None)
 
     def is_passthrough_per_char_operation(self, operator: str):
-        return re.match("^(sc|scn|g|rg|k|cs|gs|ri)$", operator, re.IGNORECASE)
+        return self.PASSTHROUGH_PER_CHAR_PATTERN.match(operator)
 
     def on_passthrough_per_char(self, operator: str, args: list[str]):
         if not self.is_passthrough_per_char_operation(operator):

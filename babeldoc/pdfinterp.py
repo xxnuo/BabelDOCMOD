@@ -121,29 +121,42 @@ class PDFPageInterpreterEx(PDFPageInterpreter):
         pass
 
     def do_S(self) -> None:
-        # 重载过滤非公式线条
         """Stroke path"""
+        self.device.paint_path(
+            self.graphicstate,
+            True,
+            False,
+            False,
+            self.curpath,
+            self.get_graphic_state(),
+        )
+        self.curpath = []
+        return
 
-        def is_black(color: Color) -> bool:
-            if isinstance(color, tuple):
-                return sum(color) == 0
-            else:
-                return color == 0
-
-        if (
-            len(self.curpath) == 2
-            and self.curpath[0][0] == "m"
-            and self.curpath[1][0] == "l"
-            and apply_matrix_pt(self.ctm, self.curpath[0][-2:])[1]
-            == apply_matrix_pt(self.ctm, self.curpath[1][-2:])[1]
-            and is_black(self.graphicstate.scolor)
-        ):  # 独立直线，水平，黑色
-            # print(apply_matrix_pt(self.ctm,self.curpath[0][-2:]),apply_matrix_pt(self.ctm,self.curpath[1][-2:]),self.graphicstate.scolor)
-            self.device.paint_path(self.graphicstate, True, False, False, self.curpath)
-            self.curpath = []
-            return "n"
-        else:
-            self.curpath = []
+    # def do_S(self) -> None:
+    #     # 重载过滤非公式线条
+    #     """Stroke path"""
+    #
+    #     def is_black(color: Color) -> bool:
+    #         if isinstance(color, tuple):
+    #             return sum(color) == 0
+    #         else:
+    #             return color == 0
+    #
+    #     if (
+    #         len(self.curpath) == 2
+    #         and self.curpath[0][0] == "m"
+    #         and self.curpath[1][0] == "l"
+    #         and apply_matrix_pt(self.ctm, self.curpath[0][-2:])[1]
+    #         == apply_matrix_pt(self.ctm, self.curpath[1][-2:])[1]
+    #         and is_black(self.graphicstate.scolor)
+    #     ):  # 独立直线，水平，黑色
+    #         # print(apply_matrix_pt(self.ctm,self.curpath[0][-2:]),apply_matrix_pt(self.ctm,self.curpath[1][-2:]),self.graphicstate.scolor)
+    #         self.device.paint_path(self.graphicstate, True, False, False, self.curpath)
+    #         self.curpath = []
+    #         return "n"
+    #     else:
+    #         self.curpath = []
 
     def do_CS(self, name: PDFStackT) -> None:
         """Set color space for stroking operations
@@ -172,25 +185,54 @@ class PDFPageInterpreterEx(PDFPageInterpreter):
     # 重载过滤非公式线条（F/B）
     def do_f(self) -> None:
         """Fill path using nonzero winding number rule"""
-        # self.device.paint_path(self.graphicstate, False, True, False, self.curpath)
+        gs = self.get_graphic_state()
+        self.device.paint_path(self.graphicstate, False, True, False, self.curpath, gs)
         self.curpath = []
 
-    def do_F(self) -> None:
-        """Fill path using nonzero winding number rule (obsolete)"""
+    def get_graphic_state(self):
+        gs = self.graphicstate.copy()
+        gs.passthrough_instruction = (
+            self.il_creater.passthrough_per_char_instruction.copy()
+        )
+        return gs
+
+    # def do_F(self) -> None:
+    #     """Fill path using nonzero winding number rule (obsolete)"""
 
     def do_f_a(self) -> None:
         """Fill path using even-odd rule"""
-        # self.device.paint_path(self.graphicstate, False, True, True, self.curpath)
+        self.device.paint_path(
+            self.graphicstate,
+            False,
+            True,
+            True,
+            self.curpath,
+            self.get_graphic_state(),
+        )
         self.curpath = []
 
     def do_B(self) -> None:
         """Fill and stroke path using nonzero winding number rule"""
-        # self.device.paint_path(self.graphicstate, True, True, False, self.curpath)
+        self.device.paint_path(
+            self.graphicstate,
+            True,
+            True,
+            False,
+            self.curpath,
+            self.get_graphic_state(),
+        )
         self.curpath = []
 
     def do_B_a(self) -> None:
         """Fill and stroke path using even-odd rule"""
-        # self.device.paint_path(self.graphicstate, True, True, True, self.curpath)
+        self.device.paint_path(
+            self.graphicstate,
+            True,
+            True,
+            True,
+            self.curpath,
+            self.get_graphic_state(),
+        )
         self.curpath = []
 
     ############################################################
@@ -380,10 +422,7 @@ class PDFPageInterpreterEx(PDFPageInterpreter):
                 raise PDFInterpreterError("No font specified!")
             return
         assert self.ncs is not None
-        gs = self.graphicstate.copy()
-        gs.passthrough_instruction = (
-            self.il_creater.passthrough_per_char_instruction.copy()
-        )
+        gs = self.get_graphic_state()
         self.device.render_string(self.textstate, cast(PDFTextSeq, seq), self.ncs, gs)
         return
 
