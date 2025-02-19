@@ -506,6 +506,7 @@ class TranslateConverter(PDFConverterEx):
                 self.il_creater.on_pdf_figure(child)
                 pass
             elif isinstance(child, LTLine):     # 线条
+                self.il_creater.on_ltline(child)
                 continue
                 layout = self.layout[ltpage.pageid]
                 # ltpage.height 可能是 fig 里面的高度，这里统一用 layout.shape
@@ -518,8 +519,10 @@ class TranslateConverter(PDFConverterEx):
                 else:                           # 全局线条
                     lstk.append(child)
             elif isinstance(child, LTCurve):
+                self.il_creater.on_ltcurve(child)
                 pass
             elif isinstance(child, LTRect):
+                self.il_creater.on_ltrect(child)
                 pass
             else:
                 pass

@@ -5,7 +5,10 @@ import re
 import pdfminer.pdfinterp
 import pymupdf
 from pdfminer.layout import LTChar
+from pdfminer.layout import LTCurve
 from pdfminer.layout import LTFigure
+from pdfminer.layout import LTLine
+from pdfminer.layout import LTRect
 from pdfminer.pdffont import PDFCIDFont
 from pdfminer.pdffont import PDFFont
 from pdfminer.psparser import PSLiteral
@@ -353,3 +356,12 @@ class ILCreater:
             figure.bbox[3],
         )
         self.current_page.pdf_figure.append(il_version_1.PdfFigure(box=box))
+
+    def on_ltline(self, line: LTLine):
+        pass
+
+    def on_ltcurve(self, curve: LTCurve):
+        logger.warning("curve is not supported yet")
+
+    def on_ltrect(self, rect: LTRect):
+        logger.warning("rect is not supported yet")
