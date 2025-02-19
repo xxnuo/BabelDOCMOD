@@ -148,6 +148,8 @@ class ILCreater:
             # currently don't support UserUnit page parameter
             # pdf32000 page 79
             unit="point",
+            pdf_shape=[],
+            pdf_rectangle=[],
         )
         self.current_page_font_name_id_map = {}
         self.passthrough_per_char_instruction_stack = []
@@ -357,7 +359,22 @@ class ILCreater:
         )
         self.current_page.pdf_figure.append(il_version_1.PdfFigure(box=box))
 
+    def create_path_instruction(self, original_path: list):
+        return " ".join(f"{arg} {op}" for op, arg in original_path)
+
     def on_ltline(self, line: LTLine):
+        shape = il_version_1.PdfShape(
+            box=il_version_1.Box(
+                line.bbox[0],
+                line.bbox[1],
+                line.bbox[2],
+                line.bbox[3],
+            ),
+            xobj_id=line.xobj_id,
+            graphic_state=self.create_graphic_state(line.graphicstate),
+            instructions=self.create_path_instruction(line.original_path),
+        )
+        self.current_page.pdf_shape.append(shape)
         pass
 
     def on_ltcurve(self, curve: LTCurve):

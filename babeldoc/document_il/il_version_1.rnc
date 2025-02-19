@@ -144,6 +144,7 @@ PDFShape =
   element pdfShape {
     Box,
     GraphicState,
+    attribute xobjId { xsd:int }?,
     attribute debug_info { xsd:boolean }?,
     attribute instructions { xsd:string }
   }

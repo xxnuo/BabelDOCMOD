@@ -200,6 +200,7 @@ class PDFConverterEx(PDFConverter):
                     original_path=transformed_path,
                     dashing_style=gstate.dash,
                 )
+                line.xobj_id = self.il_creater.xobj_id
                 line.graphicstate = graphicstate
                 self.cur_item.add(line)
 
@@ -223,6 +224,7 @@ class PDFConverterEx(PDFConverter):
                         gstate.dash,
                     )
                     rect.graphicstate = graphicstate
+                    rect.xobj_id = self.il_creater.xobj_id
                     self.cur_item.add(rect)
                 else:
                     curve = LTCurve(
@@ -237,6 +239,7 @@ class PDFConverterEx(PDFConverter):
                         gstate.dash,
                     )
                     curve.graphicstate = graphicstate
+                    curve.xobj_id = self.il_creater.xobj_id
                     self.cur_item.add(curve)
             else:
                 curve = LTCurve(
@@ -251,6 +254,7 @@ class PDFConverterEx(PDFConverter):
                     gstate.dash,
                 )
                 curve.graphicstate = graphicstate
+                curve.xobj_id = self.il_creater.xobj_id
                 self.cur_item.add(curve)
 
 
