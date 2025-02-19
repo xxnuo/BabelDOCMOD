@@ -16,6 +16,7 @@ from babeldoc.document_il.il_version_1 import PdfParagraphComposition
 from babeldoc.document_il.il_version_1 import PdfRectangle
 from babeldoc.document_il.il_version_1 import PdfSameStyleCharacters
 from babeldoc.document_il.il_version_1 import PdfSameStyleUnicodeCharacters
+from babeldoc.document_il.il_version_1 import PdfShape
 from babeldoc.document_il.il_version_1 import PdfStyle
 from babeldoc.document_il.il_version_1 import PdfXobject
 
@@ -38,6 +39,7 @@ __all__ = [
     "PdfRectangle",
     "PdfSameStyleCharacters",
     "PdfSameStyleUnicodeCharacters",
+    "PdfShape",
     "PdfStyle",
     "PdfXobject",
 ]

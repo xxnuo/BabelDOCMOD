@@ -318,6 +318,41 @@ class PdfRectangle:
 
 
 @dataclass
+class PdfShape:
+    class Meta:
+        name = "pdfShape"
+
+    box: Box | None = field(
+        default=None,
+        metadata={
+            "type": "Element",
+            "required": True,
+        },
+    )
+    graphic_state: GraphicState | None = field(
+        default=None,
+        metadata={
+            "name": "graphicState",
+            "type": "Element",
+            "required": True,
+        },
+    )
+    debug_info: bool | None = field(
+        default=None,
+        metadata={
+            "type": "Attribute",
+        },
+    )
+    instructions: str | None = field(
+        default=None,
+        metadata={
+            "type": "Attribute",
+            "required": True,
+        },
+    )
+
+
+@dataclass
 class PdfStyle:
     class Meta:
         name = "pdfStyle"

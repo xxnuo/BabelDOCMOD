@@ -387,4 +387,18 @@
       </optional>
     </element>
   </define>
+  <define name="PDFShape">
+    <element name="pdfShape">
+      <ref name="Box"/>
+      <ref name="GraphicState"/>
+      <optional>
+        <attribute name="debug_info">
+          <data type="boolean"/>
+        </attribute>
+      </optional>
+      <attribute name="instructions">
+        <data type="string"/>
+      </attribute>
+    </element>
+  </define>
 </grammar>

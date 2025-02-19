@@ -139,3 +139,10 @@ PDFRectangle =
     GraphicState,
     attribute debug_info { xsd:boolean }?
   }
+PDFShape =
+  element pdfShape {
+    Box,
+    GraphicState,
+    attribute debug_info { xsd:boolean }?,
+    attribute instructions { xsd:string }
+  }
