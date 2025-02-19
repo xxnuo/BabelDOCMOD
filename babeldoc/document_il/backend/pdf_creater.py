@@ -156,6 +156,18 @@ class PDFCreater:
         # Restore graphics state
         draw_op.append(b"Q\n")
 
+    def _render_shape(self, draw_op: BitStream, shape: il_version_1.PdfShape):
+        if shape is None:
+            return
+        draw_op.append(b"q ")
+
+        draw_op.append(
+            f"{shape.graphic_state.passthrough_per_char_instruction} \n".encode(),
+        )
+        draw_op.append(f"{shape.instructions} \n".encode())
+
+        draw_op.append(b"Q\n")
+
     def write_debug_info(
         self,
         pdf: pymupdf.Document,

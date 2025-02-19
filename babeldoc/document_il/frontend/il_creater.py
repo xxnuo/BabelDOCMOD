@@ -13,6 +13,8 @@ from pdfminer.pdffont import PDFCIDFont
 from pdfminer.pdffont import PDFFont
 from pdfminer.psparser import PSLiteral
 
+from babeldoc.const import COLOR_RE
+from babeldoc.const import PASSTHROUGH_PER_CHAR_PATTERN
 from babeldoc.document_il import il_version_1
 from babeldoc.translation_config import TranslationConfig
 
@@ -37,19 +39,12 @@ class ILCreater:
         self.xobj_inc = 0
         self.xobj_map: dict[int, il_version_1.PdfXobject] = {}
         self.xobj_stack = []
-        color_pattern = r"sc|scn|g|rg|k|cs|gs|ri"
-        line_pattern = r"w|j|M|d|i"
-
-        self.PASSTHROUGH_PER_CHAR_PATTERN = re.compile(
-            f"^({color_pattern}|{line_pattern})$",
-            re.IGNORECASE,
-        )
 
     def on_finish(self):
         self.progress.__exit__(None, None, None)
 
     def is_passthrough_per_char_operation(self, operator: str):
-        return self.PASSTHROUGH_PER_CHAR_PATTERN.match(operator)
+        return PASSTHROUGH_PER_CHAR_PATTERN.match(operator)
 
     def on_passthrough_per_char(self, operator: str, args: list[str]):
         if not self.is_passthrough_per_char_operation(operator):
@@ -248,7 +243,11 @@ class ILCreater:
         else:
             self.current_page.pdf_font.append(il_font_metadata)
 
-    def create_graphic_state(self, gs: pdfminer.pdfinterp.PDFGraphicState):
+    def create_graphic_state(
+        self,
+        gs: pdfminer.pdfinterp.PDFGraphicState,
+        filter_regex: re.Pattern | None = None,
+    ):
         graphic_state = il_version_1.GraphicState()
         for k, v in gs.__dict__.items():
             if v is None:
@@ -268,15 +267,21 @@ class ILCreater:
 
         graphic_state.stroking_color_space_name = self.stroking_color_space_name
         graphic_state.non_stroking_color_space_name = self.non_stroking_color_space_name
-
-        graphic_state.passthrough_per_char_instruction = " ".join(
-            f"{arg} {op}" for op, arg in gs.passthrough_instruction
-        )
+        if filter_regex:
+            graphic_state.passthrough_per_char_instruction = " ".join(
+                f"{arg} {op}"
+                for op, arg in gs.passthrough_instruction
+                if filter_regex.match(op)
+            )
+        else:
+            graphic_state.passthrough_per_char_instruction = " ".join(
+                f"{arg} {op}" for op, arg in gs.passthrough_instruction
+            )
 
         return graphic_state
 
     def on_lt_char(self, char: LTChar):
-        gs = self.create_graphic_state(char.graphicstate)
+        gs = self.create_graphic_state(char.graphicstate, filter_regex=COLOR_RE)
         # Get font from current page or xobject
         font = None
         for pdf_font in self.xobj_map.get(self.xobj_id, self.current_page).pdf_font:
@@ -360,7 +365,7 @@ class ILCreater:
         self.current_page.pdf_figure.append(il_version_1.PdfFigure(box=box))
 
     def create_path_instruction(self, original_path: list):
-        return " ".join(f"{arg} {op}" for op, arg in original_path)
+        return " ".join(f"{arg} {op}" for op, arg in original_path) + " S"
 
     def on_ltline(self, line: LTLine):
         shape = il_version_1.PdfShape(
