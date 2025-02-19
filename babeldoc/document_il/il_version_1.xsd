@@ -20,6 +20,7 @@
         <xs:element minOccurs="0" maxOccurs="unbounded" ref="pdfParagraph"/>
         <xs:element minOccurs="0" maxOccurs="unbounded" ref="pdfFigure"/>
         <xs:element minOccurs="0" maxOccurs="unbounded" ref="pdfCharacter"/>
+        <xs:element minOccurs="0" maxOccurs="unbounded" ref="pdfShape"/>
         <xs:element ref="baseOperations"/>
       </xs:sequence>
       <xs:attribute name="pageNumber" use="required" type="xs:int"/>

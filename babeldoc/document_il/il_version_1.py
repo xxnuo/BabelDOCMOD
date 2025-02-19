@@ -786,6 +786,13 @@ class Page:
             "type": "Element",
         },
     )
+    pdf_shape: list[PdfShape] = field(
+        default_factory=list,
+        metadata={
+            "name": "pdfShape",
+            "type": "Element",
+        },
+    )
     base_operations: BaseOperations | None = field(
         default=None,
         metadata={

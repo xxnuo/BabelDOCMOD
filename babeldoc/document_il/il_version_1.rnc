@@ -15,6 +15,7 @@ Page =
     PDFParagraph*,
     PDFFigure*,
     PDFCharacter*,
+    PDFShape*,
     attribute pageNumber { xsd:int },
     attribute Unit { xsd:string },
     element baseOperations { xsd:string }

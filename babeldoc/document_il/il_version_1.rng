@@ -42,6 +42,9 @@
       <zeroOrMore>
         <ref name="PDFCharacter"/>
       </zeroOrMore>
+      <zeroOrMore>
+        <ref name="PDFShape"/>
+      </zeroOrMore>
       <attribute name="pageNumber">
         <data type="int"/>
       </attribute>
