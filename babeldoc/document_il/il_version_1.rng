@@ -395,6 +395,11 @@
       <ref name="Box"/>
       <ref name="GraphicState"/>
       <optional>
+        <attribute name="xobjId">
+          <data type="int"/>
+        </attribute>
+      </optional>
+      <optional>
         <attribute name="debug_info">
           <data type="boolean"/>
         </attribute>

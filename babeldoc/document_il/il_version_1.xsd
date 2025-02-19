@@ -239,6 +239,7 @@
         <xs:element ref="box"/>
         <xs:element ref="graphicState"/>
       </xs:sequence>
+      <xs:attribute name="xobjId" type="xs:int"/>
       <xs:attribute name="debug_info" type="xs:boolean"/>
       <xs:attribute name="instructions" use="required" type="xs:string"/>
     </xs:complexType>

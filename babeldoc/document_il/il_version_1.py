@@ -337,6 +337,13 @@ class PdfShape:
             "required": True,
         },
     )
+    xobj_id: int | None = field(
+        default=None,
+        metadata={
+            "name": "xobjId",
+            "type": "Attribute",
+        },
+    )
     debug_info: bool | None = field(
         default=None,
         metadata={
