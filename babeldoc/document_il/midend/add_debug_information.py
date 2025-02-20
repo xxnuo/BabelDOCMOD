@@ -4,6 +4,7 @@ import babeldoc.document_il.il_version_1 as il_version_1
 from babeldoc.document_il import GraphicState
 from babeldoc.document_il.utils.style_helper import BLUE
 from babeldoc.document_il.utils.style_helper import ORANGE
+from babeldoc.document_il.utils.style_helper import RED
 from babeldoc.document_il.utils.style_helper import YELLOW
 from babeldoc.translation_config import TranslationConfig
 
@@ -24,11 +25,17 @@ class AddDebugInformation:
         for page in docs.page:
             self.process_page(page)
 
-    def _create_rectangle(self, box: il_version_1.Box, color: GraphicState):
+    def _create_rectangle(
+        self,
+        box: il_version_1.Box,
+        color: GraphicState,
+        line_width: float = 1,
+    ):
         rect = il_version_1.PdfRectangle(
             box=box,
             graphic_state=color,
             debug_info=True,
+            linewidth=line_width,
         )
         return rect
 
@@ -62,6 +69,7 @@ class AddDebugInformation:
         )
 
     def process_page(self, page: il_version_1.Page):
+        self._draw_chars_rectangle(page)
         # Add page number text at top-left corner
         page_width = page.cropbox.box.x2 - page.cropbox.box.x
         page_height = page.cropbox.box.y2 - page.cropbox.box.y
@@ -136,3 +144,26 @@ class AddDebugInformation:
                 )
 
         page.pdf_paragraph.extend(new_paragraphs)
+
+    def _draw_chars_rectangle(self, page: il_version_1.Page):
+        chars = []
+        chars.extend(page.pdf_character)
+
+        for para in page.pdf_paragraph:
+            for comp in para.pdf_paragraph_composition:
+                if comp.pdf_line:
+                    chars.extend(comp.pdf_line.pdf_character)
+                elif comp.pdf_same_style_characters:
+                    chars.extend(comp.pdf_same_style_characters.pdf_character)
+                elif comp.pdf_formula:
+                    chars.extend(comp.pdf_formula.pdf_character)
+                elif comp.pdf_character:
+                    chars.append(comp.pdf_character)
+                elif comp.pdf_same_style_unicode_characters:
+                    continue
+                else:
+                    raise ValueError(f"Unknown composition type: {comp}")
+
+        for char in chars:
+            rect = self._create_rectangle(char.box, RED, line_width=0.1)
+            page.pdf_rectangle.append(rect)
