@@ -1,7 +1,6 @@
 import logging
 import random
 import re
-from typing import Literal
 
 from babeldoc.document_il import Box
 from babeldoc.document_il import Page
@@ -12,6 +11,9 @@ from babeldoc.document_il import PdfParagraphComposition
 from babeldoc.document_il.utils.layout_helper import Layout
 from babeldoc.document_il.utils.layout_helper import add_space_dummy_chars
 from babeldoc.document_il.utils.layout_helper import get_char_unicode_string
+from babeldoc.document_il.utils.layout_helper import get_layout
+from babeldoc.document_il.utils.layout_helper import is_isolated_formula
+from babeldoc.document_il.utils.layout_helper import is_text_layout
 from babeldoc.translation_config import TranslationConfig
 
 logger = logging.getLogger(__name__)
@@ -120,14 +122,6 @@ class ParagraphFinder:
         for paragraph in paragraphs:
             self.update_paragraph_data(paragraph, update_unicode=True)
 
-    def is_isolated_formula(self, char: PdfCharacter):
-        return char.char_unicode in (
-            "(cid:122)",
-            "(cid:123)",
-            "(cid:124)",
-            "(cid:125)",
-        )
-
     def create_paragraphs(self, page: Page) -> list[PdfParagraph]:
         paragraphs: list[PdfParagraph] = []
         if page.pdf_paragraph:
@@ -140,8 +134,8 @@ class ParagraphFinder:
         skip_chars = []
 
         for char in page.pdf_character:
-            char_layout = self.get_layout(char, page)
-            if not self.is_text_layout(char_layout) or self.is_isolated_formula(char):
+            char_layout = get_layout(char, page)
+            if not is_text_layout(char_layout) or is_isolated_formula(char):
                 skip_chars.append(char)
                 continue
 
@@ -240,112 +234,6 @@ class ParagraphFinder:
 
         paragraph.pdf_paragraph_composition = processed_lines
         self.update_paragraph_data(paragraph)
-
-    def is_text_layout(self, layout: Layout):
-        return layout is not None and layout.name in [
-            "plain text",
-            "title",
-            "abandon",
-            "figure_caption",
-            "table_caption",
-        ]
-
-    def get_layout(
-        self,
-        char: PdfCharacter,
-        page: Page,
-        xy_mode: Literal["topleft"]
-        | Literal["bottomright"]
-        | Literal["middle"] = "middle",
-    ):
-        tl, br, md = [
-            self._get_layout(char, page, mode)
-            for mode in ["topleft", "bottomright", "middle"]
-        ]
-        if tl is not None and tl.name == "isolate_formula":
-            return tl
-        if br is not None and br.name == "isolate_formula":
-            return br
-        if md is not None and md.name == "isolate_formula":
-            return md
-
-        if md is not None:
-            return md
-        if tl is not None:
-            return tl
-        return br
-
-    def _get_layout(
-        self,
-        char: PdfCharacter,
-        page: Page,
-        xy_mode: Literal["topleft"]
-        | Literal["bottomright"]
-        | Literal["middle"] = "middle",
-    ):
-        # 这几个符号，解析出来的大小经常只有实际大小的一点点。
-        # if (
-        #     xy_mode != "bottomright"
-        #     and char.char_unicode in HEIGHT_NOT_USFUL_CHAR_IN_CHAR
-        # ):
-        #     return self.get_layout(char, page, "bottomright")
-        # current layouts
-        # {
-        #     "title",
-        #     "plain text",
-        #     "abandon",
-        #     "figure",
-        #     "figure_caption",
-        #     "table",
-        #     "table_caption",
-        #     "table_footnote",
-        #     "isolate_formula",
-        #     "formula_caption",
-        # }
-        layout_priority = [
-            "formula_caption",
-            "isolate_formula",
-            "table_footnote",
-            "table",
-            "figure",
-            "table_caption",
-            "figure_caption",
-            "abandon",
-            "plain text",
-            "title",
-        ]
-        char_box = char.box
-        if xy_mode == "topleft":
-            char_x = char_box.x
-            char_y = char_box.y2
-        elif xy_mode == "bottomright":
-            char_x = char_box.x2
-            char_y = char_box.y
-        elif xy_mode == "middle":
-            char_x = (char_box.x + char_box.x2) / 2
-            char_y = (char_box.y + char_box.y2) / 2
-        else:
-            logger.error(f"Invalid xy_mode: {xy_mode}")
-            return self.get_layout(char, page, "middle")
-        # 按照优先级顺序检查每种布局
-        matching_layouts = {}
-        for layout in page.page_layout:
-            layout_box = layout.box
-            if (
-                layout_box.x <= char_x <= layout_box.x2
-                and layout_box.y <= char_y <= layout_box.y2
-            ):
-                matching_layouts[layout.class_name] = Layout(
-                    layout.id,
-                    layout.class_name,
-                )
-
-        # 按照优先级返回最高优先级的布局
-        for layout_name in layout_priority:
-            if layout_name in matching_layouts:
-                return matching_layouts[layout_name]
-
-        return None
 
     def create_line(self, chars: list[PdfCharacter]) -> PdfParagraphComposition:
         assert chars

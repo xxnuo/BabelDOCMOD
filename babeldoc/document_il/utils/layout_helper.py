@@ -1,7 +1,9 @@
 import logging
 import math
+from typing import Literal
 
 from babeldoc.document_il import GraphicState
+from babeldoc.document_il import Page
 from babeldoc.document_il.il_version_1 import Box
 from babeldoc.document_il.il_version_1 import PdfCharacter
 from babeldoc.document_il.il_version_1 import PdfParagraph
@@ -465,3 +467,116 @@ def _add_space_dummy_chars_to_list(chars: list[PdfCharacter]) -> None:
             i += 2  # 跳过刚插入的空格
         else:
             i += 1
+
+
+def is_text_layout(layout: Layout):
+    return layout is not None and layout.name in [
+        "plain text",
+        "title",
+        "abandon",
+        "figure_caption",
+        "table_caption",
+    ]
+
+
+def get_layout(
+    char: PdfCharacter,
+    page: Page,
+    _xy_mode: Literal["topleft"]
+    | Literal["bottomright"]
+    | Literal["middle"] = "middle",
+):
+    tl, br, md = [
+        _get_layout(char, page, mode) for mode in ["topleft", "bottomright", "middle"]
+    ]
+    if tl is not None and tl.name == "isolate_formula":
+        return tl
+    if br is not None and br.name == "isolate_formula":
+        return br
+    if md is not None and md.name == "isolate_formula":
+        return md
+
+    if md is not None:
+        return md
+    if tl is not None:
+        return tl
+    return br
+
+
+def _get_layout(
+    char: PdfCharacter,
+    page: Page,
+    xy_mode: Literal["topleft"] | Literal["bottomright"] | Literal["middle"] = "middle",
+):
+    # 这几个符号，解析出来的大小经常只有实际大小的一点点。
+    # if (
+    #     xy_mode != "bottomright"
+    #     and char.char_unicode in HEIGHT_NOT_USFUL_CHAR_IN_CHAR
+    # ):
+    #     return self.get_layout(char, page, "bottomright")
+    # current layouts
+    # {
+    #     "title",
+    #     "plain text",
+    #     "abandon",
+    #     "figure",
+    #     "figure_caption",
+    #     "table",
+    #     "table_caption",
+    #     "table_footnote",
+    #     "isolate_formula",
+    #     "formula_caption",
+    # }
+    layout_priority = [
+        "formula_caption",
+        "isolate_formula",
+        "table_footnote",
+        "table",
+        "figure",
+        "table_caption",
+        "figure_caption",
+        "abandon",
+        "plain text",
+        "title",
+    ]
+    char_box = char.box
+    if xy_mode == "topleft":
+        char_x = char_box.x
+        char_y = char_box.y2
+    elif xy_mode == "bottomright":
+        char_x = char_box.x2
+        char_y = char_box.y
+    elif xy_mode == "middle":
+        char_x = (char_box.x + char_box.x2) / 2
+        char_y = (char_box.y + char_box.y2) / 2
+    else:
+        logger.error(f"Invalid xy_mode: {xy_mode}")
+        return get_layout(char, page, "middle")
+    # 按照优先级顺序检查每种布局
+    matching_layouts = {}
+    for layout in page.page_layout:
+        layout_box = layout.box
+        if (
+            layout_box.x <= char_x <= layout_box.x2
+            and layout_box.y <= char_y <= layout_box.y2
+        ):
+            matching_layouts[layout.class_name] = Layout(
+                layout.id,
+                layout.class_name,
+            )
+
+    # 按照优先级返回最高优先级的布局
+    for layout_name in layout_priority:
+        if layout_name in matching_layouts:
+            return matching_layouts[layout_name]
+
+    return None
+
+
+def is_isolated_formula(char: PdfCharacter):
+    return char.char_unicode in (
+        "(cid:122)",
+        "(cid:123)",
+        "(cid:124)",
+        "(cid:125)",
+    )
