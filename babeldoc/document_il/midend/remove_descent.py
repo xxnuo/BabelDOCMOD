@@ -131,12 +131,19 @@ class RemoveDescent:
 
                 # Handle characters in PdfFormula
                 elif comp.pdf_formula:
+                    formula_bboxs = []
                     for char in comp.pdf_formula.pdf_character:
                         if font := get_font(char.pdf_style.font_id, char.xobj_id):
                             descent = self._remove_char_descent(char, font)
                             if descent is not None:
+                                formula_bboxs.append(char.box)
                                 descent_values.append(descent)
                                 vertical_chars.append(char.vertical)
+                    if formula_bboxs:
+                        min_y = min(bbox.y for bbox in formula_bboxs)
+                        max_y = max(bbox.y2 for bbox in formula_bboxs)
+                        comp.pdf_formula.box.y = min_y
+                        comp.pdf_formula.box.y2 = max_y
 
                 # Handle characters in PdfSameStyleCharacters
                 elif comp.pdf_same_style_characters:
