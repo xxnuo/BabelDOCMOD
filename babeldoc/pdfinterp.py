@@ -1,4 +1,5 @@
 import logging
+import re
 from collections.abc import Sequence
 from typing import Any
 from typing import cast
@@ -428,6 +429,23 @@ class PDFPageInterpreterEx(PDFPageInterpreter):
 
     # Run PostScript commands
     # The Do_xxx method is the method for executing corresponding postscript instructions
+    def _should_format_operation(self, name: str) -> bool:
+        """Check if the operation should be formatted and included in output.
+
+        Args:
+            name: Operation name
+
+        Returns:
+            True if the operation should be formatted, False otherwise
+        """
+        # Matches:
+        # - T* (text operations starting with T)
+        # - Single/double quotes
+        # - BI/ID/EI (image operations)
+        # - MP/DP/BMC/BDC/EMC (marked content operations)
+        excluded_pattern = r'^(T.*|[\'"]|BI|ID|EI|MP|DP|BMC|BDC|EMC|m|l|c|v|y|h|re|S)$'
+        return not bool(re.match(excluded_pattern, name))
+
     def execute(self, streams: Sequence[object]) -> None:
         ops = ""
         for stream in streams:
@@ -461,39 +479,19 @@ class PDFPageInterpreterEx(PDFPageInterpreter):
                                     name,
                                 ):
                                     self.il_creater.on_passthrough_per_char(name, args)
-                                if not (
-                                    name[0] == "T"
-                                    or name
-                                    in ['"', "'", "EI", "MP", "DP", "BMC", "BDC"]
+                                if self._should_format_operation(
+                                    name,
                                 ):  # 过滤 T 系列文字指令，因为 EI 的参数是 obj 所以也需要过滤（只在少数文档中画横线时使用），过滤 marked 系列指令
-                                    p = " ".join(
-                                        [
-                                            (
-                                                f"{x:f}"
-                                                if isinstance(x, float)
-                                                else str(x).replace("'", "")
-                                            )
-                                            for x in args
-                                        ],
-                                    )
-                                    ops += f"{p} {name} "
+                                    p = self._format_operation(args, name)
+                                    ops += p
                         else:
                             # log.debug("exec: %s", name)
                             targs = func()
                             if targs is None:
                                 targs = []
-                            if not (name[0] == "T" or name in ["BI", "ID", "EMC"]):
-                                p = " ".join(
-                                    [
-                                        (
-                                            f"{x:f}"
-                                            if isinstance(x, float)
-                                            else str(x).replace("'", "")
-                                        )
-                                        for x in targs
-                                    ],
-                                )
-                                ops += f"{p} {name} "
+                            if self._should_format_operation(name):
+                                p = self._format_operation(targs, name)
+                                ops += p
                     elif settings.STRICT:
                         error_msg = f"Unknown operator: {name!r}"
                         raise PDFInterpreterError(error_msg)
@@ -501,3 +499,24 @@ class PDFPageInterpreterEx(PDFPageInterpreter):
                     self.push(obj)
             # print('REV DATA',ops)
         return ops
+
+    def _format_operation(self, args: list, name: str) -> str:
+        """Format PDF operation arguments and name into a string.
+
+        Args:
+            args: List of operation arguments
+            name: Operation name
+
+        Returns:
+            Formatted operation string with arguments and name
+        """
+        if not args:
+            return f"{name} "
+
+        p = " ".join(
+            [
+                (f"{x:f}" if isinstance(x, float) else str(x).replace("'", ""))
+                for x in args
+            ],
+        )
+        return f"{p} {name} "

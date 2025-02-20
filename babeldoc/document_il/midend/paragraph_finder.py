@@ -102,6 +102,7 @@ class ParagraphFinder:
         )
 
     def process_page(self, page: Page):
+        self.filter_shape(page)
         # 第一步：根据 layout 创建 paragraphs
         # 在这一步中，page.pdf_character 中的字符会被移除
         paragraphs = self.create_paragraphs(page)
@@ -121,6 +122,16 @@ class ParagraphFinder:
 
         for paragraph in paragraphs:
             self.update_paragraph_data(paragraph, update_unicode=True)
+
+    def filter_shape(self, page: Page):
+        ok_shapes = []
+        for shape in page.pdf_shape:
+            layout = get_layout(shape, page)
+            if is_text_layout(layout):
+                continue
+
+            ok_shapes.append(shape)
+        page.pdf_shape = ok_shapes
 
     def create_paragraphs(self, page: Page) -> list[PdfParagraph]:
         paragraphs: list[PdfParagraph] = []

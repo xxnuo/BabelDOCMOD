@@ -303,6 +303,15 @@ class PDFCreater:
                 page_op.append(
                     f"q Q 1 0 0 1 {page.cropbox.box.x} {page.cropbox.box.y} cm \n".encode(),
                 )
+
+                for shape in page.pdf_shape:
+                    if shape is None:
+                        continue
+                    if shape.xobj_id in xobj_draw_ops:
+                        self._render_shape(xobj_draw_ops[shape.xobj_id], shape)
+                    else:
+                        self._render_shape(page_op, shape)
+
                 # 收集所有字符
                 chars = []
                 # 首先添加页面级别的字符

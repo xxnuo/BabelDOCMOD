@@ -365,7 +365,18 @@ class ILCreater:
         self.current_page.pdf_figure.append(il_version_1.PdfFigure(box=box))
 
     def create_path_instruction(self, original_path: list):
-        return " ".join(f"{arg} {op}" for op, arg in original_path) + " S"
+        return (
+            " ".join(
+                self._create_path_instruction(op, arg) for op, arg in original_path
+            )
+            + " S"
+        )
+
+    def _create_path_instruction(self, op, arg):
+        if isinstance(arg, list) or isinstance(arg, tuple):
+            return f"{' '.join(str(a) for a in arg)} {op}"
+        else:
+            return f"{arg} {op}"
 
     def on_ltline(self, line: LTLine):
         shape = il_version_1.PdfShape(
