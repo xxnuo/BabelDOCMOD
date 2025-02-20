@@ -230,6 +230,7 @@
         <xs:element ref="box"/>
         <xs:element ref="graphicState"/>
       </xs:sequence>
+      <xs:attribute name="linewidth" type="xs:float"/>
       <xs:attribute name="debug_info" type="xs:boolean"/>
     </xs:complexType>
   </xs:element>

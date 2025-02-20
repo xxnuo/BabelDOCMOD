@@ -138,6 +138,7 @@ PDFRectangle =
   element pdfRectangle {
     Box,
     GraphicState,
+    attribute linewidth { xsd:float }?,
     attribute debug_info { xsd:boolean }?
   }
 PDFShape =

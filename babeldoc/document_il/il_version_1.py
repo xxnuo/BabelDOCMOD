@@ -309,6 +309,12 @@ class PdfRectangle:
             "required": True,
         },
     )
+    linewidth: float | None = field(
+        default=None,
+        metadata={
+            "type": "Attribute",
+        },
+    )
     debug_info: bool | None = field(
         default=None,
         metadata={
