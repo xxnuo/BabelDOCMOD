@@ -249,24 +249,6 @@ class ILCreater:
         filter_regex: re.Pattern | None = None,
     ):
         graphic_state = il_version_1.GraphicState()
-        for k, v in gs.__dict__.items():
-            if v is None:
-                continue
-            if k in ["scolor", "ncolor"]:
-                if isinstance(v, tuple):
-                    v = list(v)
-                else:
-                    v = [v]
-                setattr(graphic_state, k, v)
-                continue
-            if k == "linewidth":
-                graphic_state.linewidth = float(v)
-                continue
-            continue
-            raise NotImplementedError
-
-        graphic_state.stroking_color_space_name = self.stroking_color_space_name
-        graphic_state.non_stroking_color_space_name = self.non_stroking_color_space_name
         if filter_regex:
             graphic_state.passthrough_per_char_instruction = " ".join(
                 f"{arg} {op}"
@@ -279,6 +261,24 @@ class ILCreater:
             )
 
         return graphic_state
+        # for k, v in gs.__dict__.items():
+        #     if v is None:
+        #         continue
+        #     if k in ["scolor", "ncolor"]:
+        #         if isinstance(v, tuple):
+        #             v = list(v)
+        #         else:
+        #             v = [v]
+        #         setattr(graphic_state, k, v)
+        #         continue
+        #     if k == "linewidth":
+        #         graphic_state.linewidth = float(v)
+        #         continue
+        #     continue
+        #     raise NotImplementedError
+        #
+        # graphic_state.stroking_color_space_name = self.stroking_color_space_name
+        # graphic_state.non_stroking_color_space_name = self.non_stroking_color_space_name
 
     def on_lt_char(self, char: LTChar):
         gs = self.create_graphic_state(char.graphicstate, filter_regex=COLOR_RE)
@@ -365,36 +365,76 @@ class ILCreater:
         self.current_page.pdf_figure.append(il_version_1.PdfFigure(box=box))
 
     def create_path_instruction(self, original_path: list):
-        return (
-            " ".join(
-                self._create_path_instruction(op, arg) for op, arg in original_path
+        try:
+            return (
+                " ".join(
+                    self._create_path_instruction(path_component)
+                    for path_component in original_path
+                )
+                + " S"
             )
-            + " S"
-        )
+        except Exception as e:
+            logger.exception(f"Error creating path: {e}")
 
-    def _create_path_instruction(self, op, arg):
-        if isinstance(arg, list) or isinstance(arg, tuple):
-            return f"{' '.join(str(a) for a in arg)} {op}"
+    def _create_path_instruction(self, path_component):
+        if len(path_component) == 2:
+            op, arg = path_component
         else:
-            return f"{arg} {op}"
+            op = path_component[0]
+            arg = []
+
+        if isinstance(arg, list) or isinstance(arg, tuple):
+            return f"{' '.join(str(a) for a in arg)} {str(op)}"
+        else:
+            return f"{str(arg)} {str(op)}"
 
     def on_ltline(self, line: LTLine):
-        shape = il_version_1.PdfShape(
-            box=il_version_1.Box(
-                line.bbox[0],
-                line.bbox[1],
-                line.bbox[2],
-                line.bbox[3],
-            ),
-            xobj_id=line.xobj_id,
-            graphic_state=self.create_graphic_state(line.graphicstate),
-            instructions=self.create_path_instruction(line.original_path),
-        )
-        self.current_page.pdf_shape.append(shape)
-        pass
+        try:
+            shape = il_version_1.PdfShape(
+                box=il_version_1.Box(
+                    line.bbox[0],
+                    line.bbox[1],
+                    line.bbox[2],
+                    line.bbox[3],
+                ),
+                xobj_id=line.xobj_id,
+                graphic_state=self.create_graphic_state(line.graphicstate),
+                instructions=self.create_path_instruction(line.original_path),
+            )
+            self.current_page.pdf_shape.append(shape)
+        except Exception as e:
+            logger.exception("Error creating line")
 
     def on_ltcurve(self, curve: LTCurve):
-        logger.warning("curve is not supported yet")
+        try:
+            shape = il_version_1.PdfShape(
+                box=il_version_1.Box(
+                    curve.bbox[0],
+                    curve.bbox[1],
+                    curve.bbox[2],
+                    curve.bbox[3],
+                ),
+                xobj_id=curve.xobj_id,
+                graphic_state=self.create_graphic_state(curve.graphicstate),
+                instructions=self.create_path_instruction(curve.original_path),
+            )
+            self.current_page.pdf_shape.append(shape)
+        except Exception as e:
+            logger.exception("Error creating curve")
 
     def on_ltrect(self, rect: LTRect):
-        logger.warning("rect is not supported yet")
+        try:
+            shape = il_version_1.PdfShape(
+                box=il_version_1.Box(
+                    rect.bbox[0],
+                    rect.bbox[1],
+                    rect.bbox[2],
+                    rect.bbox[3],
+                ),
+                xobj_id=rect.xobj_id,
+                graphic_state=self.create_graphic_state(rect.graphicstate),
+                instructions=self.create_path_instruction(rect.original_path),
+            )
+            self.current_page.pdf_shape.append(shape)
+        except Exception as e:
+            logger.exception(f"Error creating rect: {e}")

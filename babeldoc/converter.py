@@ -522,11 +522,11 @@ class TranslateConverter(PDFConverterEx):
                     vlstk.append(child)
                 else:                           # 全局线条
                     lstk.append(child)
-            elif isinstance(child, LTCurve):
-                self.il_creater.on_ltcurve(child)
-                pass
             elif isinstance(child, LTRect):
                 self.il_creater.on_ltrect(child)
+                pass
+            elif isinstance(child, LTCurve):
+                self.il_creater.on_ltcurve(child)
                 pass
             else:
                 pass
