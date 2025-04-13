@@ -2,7 +2,6 @@ import contextlib
 import html
 import json
 import logging
-import re
 import threading
 import time
 from typing import Dict
@@ -10,11 +9,14 @@ import unicodedata
 from abc import ABC
 from abc import abstractmethod
 
-import httpx
 import openai
-import requests
+from tenacity import retry
+from tenacity import retry_if_exception_type
+from tenacity import stop_after_attempt
+from tenacity import wait_exponential
 
 from babeldoc.document_il.translator.cache import TranslationCache
+from babeldoc.document_il.utils.atomic_integer import AtomicInteger
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +107,7 @@ class BaseTranslator(ABC):
         """
         self.cache.add_params(k, v)
 
-    def translate(self, text, ignore_cache=False):
+    def translate(self, text, ignore_cache=False, rate_limit_params: dict = None):
         """
         Translate the text, and the other part should call this method.
         :param text: text to translate
@@ -118,13 +120,40 @@ class BaseTranslator(ABC):
                 self.translate_cache_call_count += 1
                 return cache
         _translate_rate_limiter.wait()
-        translation = self.do_translate(text)
+        translation = self.do_translate(text, rate_limit_params)
+        if not (self.ignore_cache or ignore_cache):
+            self.cache.set(text, translation)
+        return translation
+
+    def llm_translate(self, text, ignore_cache=False, rate_limit_params: dict = None):
+        """
+        Translate the text, and the other part should call this method.
+        :param text: text to translate
+        :return: translated text
+        """
+        self.translate_call_count += 1
+        if not (self.ignore_cache or ignore_cache):
+            cache = self.cache.get(text)
+            if cache is not None:
+                self.translate_cache_call_count += 1
+                return cache
+        _translate_rate_limiter.wait()
+        translation = self.do_llm_translate(text, rate_limit_params)
         if not (self.ignore_cache or ignore_cache):
             self.cache.set(text, translation)
         return translation
 
     @abstractmethod
-    def do_translate(self, text):
+    def do_llm_translate(self, text, rate_limit_params: dict = None):
+        """
+        Actual translate text, override this method
+        :param text: text to translate
+        :return: translated text
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def do_translate(self, text, rate_limit_params: dict = None):
         """
         Actual translate text, override this method
         :param text: text to translate
@@ -150,80 +179,6 @@ class BaseTranslator(ABC):
         return self.get_rich_text_left_placeholder(placeholder_id)
 
 
-class GoogleTranslator(BaseTranslator):
-    name = "google"
-    lang_map = {"zh": "zh-CN"}
-
-    def __init__(self, lang_in, lang_out, ignore_cache=False):
-        super().__init__(lang_in, lang_out, ignore_cache)
-        self.session = requests.Session()
-        self.endpoint = "http://translate.google.com/m"
-        self.headers = {
-            "User-Agent": "Mozilla/4.0 (compatible;MSIE 6.0;Windows NT 5.1;SV1;.NET CLR 1.1.4322;.NET CLR 2.0.50727;.NET CLR 3.0.04506.30)",
-        }
-
-    def do_translate(self, text):
-        text = text[:5000]  # google translate max length
-        response = self.session.get(
-            self.endpoint,
-            params={"tl": self.lang_out, "sl": self.lang_in, "q": text},
-            headers=self.headers,
-        )
-        re_result = re.findall(
-            r'(?s)class="(?:t0|result-container)">(.*?)<',
-            response.text,
-        )
-        if response.status_code == 400:
-            result = "IRREPARABLE TRANSLATION ERROR"
-        else:
-            response.raise_for_status()
-            result = html.unescape(re_result[0])
-        return remove_control_characters(result)
-
-
-class BingTranslator(BaseTranslator):
-    # https://github.com/immersive-translate/old-immersive-translate/blob/6df13da22664bea2f51efe5db64c63aca59c4e79/src/background/translationService.js
-    name = "bing"
-    lang_map = {"zh": "zh-Hans"}
-
-    def __init__(self, lang_in, lang_out, ignore_cache=False):
-        super().__init__(lang_in, lang_out, ignore_cache)
-        self.session = requests.Session()
-        self.endpoint = "https://www.bing.com/translator"
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
-        }
-
-    def find_sid(self):
-        response = self.session.get(self.endpoint)
-        response.raise_for_status()
-        url = response.url[:-10]
-        ig = re.findall(r"\"ig\":\"(.*?)\"", response.text)[0]
-        iid = re.findall(r"data-iid=\"(.*?)\"", response.text)[-1]
-        key, token = re.findall(
-            r"params_AbusePreventionHelper\s=\s\[(.*?),\"(.*?)\",",
-            response.text,
-        )[0]
-        return url, ig, iid, key, token
-
-    def do_translate(self, text):
-        text = text[:1000]  # bing translate max length
-        url, ig, iid, key, token = self.find_sid()
-        response = self.session.post(
-            f"{url}ttranslatev3?IG={ig}&IID={iid}",
-            data={
-                "fromLang": self.lang_in,
-                "to": self.lang_out,
-                "text": text,
-                "token": token,
-                "key": key,
-            },
-            headers=self.headers,
-        )
-        response.raise_for_status()
-        return response.json()[0]["translations"][0]["text"]
-
-
 class OpenAITranslator(BaseTranslator):
     # https://github.com/openai/openai-python
     name = "openai"
@@ -244,13 +199,28 @@ class OpenAITranslator(BaseTranslator):
         self.model = model
         self.add_cache_impact_parameters("model", self.model)
         self.add_cache_impact_parameters("prompt", self.prompt(""))
+        self.token_count = AtomicInteger()
+        self.prompt_token_count = AtomicInteger()
+        self.completion_token_count = AtomicInteger()
 
-    def do_translate(self, text) -> str:
+    @retry(
+        retry=retry_if_exception_type(openai.RateLimitError),
+        stop=stop_after_attempt(100),
+        wait=wait_exponential(multiplier=1, min=1, max=15),
+        before_sleep=lambda retry_state: logger.warning(
+            f"RateLimitError, retrying in {retry_state.next_action.sleep} seconds... "
+            f"(Attempt {retry_state.attempt_number}/100)"
+        ),
+    )
+    def do_translate(self, text, rate_limit_params: dict = None) -> str:
         response = self.client.chat.completions.create(
             model=self.model,
             **self.options,
             messages=self.prompt(text),
         )
+        self.token_count.inc(response.usage.total_tokens)
+        self.prompt_token_count.inc(response.usage.prompt_tokens)
+        self.completion_token_count.inc(response.usage.completion_tokens)
         return response.choices[0].message.content.strip()
 
     def prompt(self, text):
@@ -265,10 +235,33 @@ class OpenAITranslator(BaseTranslator):
             },
         ]
 
-    def get_formular_placeholder(self, placeholder_id: int):
-        return "{{v" + str(placeholder_id) + "}}"
-        return "{{" + str(placeholder_id) + "}}"
-
+    @retry(
+        retry=retry_if_exception_type(openai.RateLimitError),
+        stop=stop_after_attempt(100),
+        wait=wait_exponential(multiplier=1, min=1, max=15),
+        before_sleep=lambda retry_state: logger.warning(
+            f"RateLimitError, retrying in {retry_state.next_action.sleep} seconds... "
+            f"(Attempt {retry_state.attempt_number}/100)"
+        ),
+    )
+    def do_llm_translate(self, text, rate_limit_params: dict = None):
+        if text is None:
+            return None
+        response = self.client.chat.completions.create(
+            model=self.model,
+            **self.options,
+            messages=[
+                {
+                    "role": "user",
+                    "content": text,
+                },
+            ],
+        )
+        self.token_count.inc(response.usage.total_tokens)
+        self.prompt_token_count.inc(response.usage.prompt_tokens)
+        self.completion_token_count.inc(response.usage.completion_tokens)
+        return response.choices[0].message.content.strip()
+    
     def get_rich_text_left_placeholder(self, placeholder_id: int):
         return self.get_formular_placeholder(placeholder_id)
 

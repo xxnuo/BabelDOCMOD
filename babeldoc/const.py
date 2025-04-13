@@ -1,10 +1,11 @@
+import os
 import shutil
 import subprocess
 from pathlib import Path
 import os
 import sys
 
-__version__ = "0.1.27"
+__version__ = "0.3.7"
 ROOT_DIR: str = os.path.abspath(os.getenv("ROOT_DIR", os.path.dirname(sys.argv[0])))
 
 CACHE_FOLDER = Path(os.path.join(ROOT_DIR, "data/cache"))
@@ -38,3 +39,7 @@ try:
     )
 except (OSError, FileNotFoundError, subprocess.CalledProcessError):
     WATERMARK_VERSION = f"v{__version__}"
+
+TIKTOKEN_CACHE_FOLDER = CACHE_FOLDER / "tiktoken"
+TIKTOKEN_CACHE_FOLDER.mkdir(parents=True, exist_ok=True)
+os.environ["TIKTOKEN_CACHE_DIR"] = str(TIKTOKEN_CACHE_FOLDER)

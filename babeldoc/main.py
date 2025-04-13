@@ -14,18 +14,17 @@ from rich.progress import TimeRemainingColumn
 
 import babeldoc.assets.assets
 import babeldoc.high_level
-from babeldoc.document_il.translator.translator import BingTranslator
-from babeldoc.document_il.translator.translator import GoogleTranslator
 from babeldoc.document_il.translator.translator import OpenAITranslator
 from babeldoc.document_il.translator.translator import OpenAIAdvancedTranslator
 from babeldoc.document_il.translator.translator import set_translate_rate_limiter
 from babeldoc.docvision.doclayout import DocLayoutModel
 from babeldoc.docvision.rpc_doclayout import RpcDocLayoutModel
+from babeldoc.docvision.table_detection.rapidocr import RapidOCRModel
 from babeldoc.translation_config import TranslationConfig
 from babeldoc.translation_config import WatermarkOutputMode
 
 logger = logging.getLogger(__name__)
-__version__ = "0.1.27"
+__version__ = "0.3.7"
 
 
 def create_parser():
@@ -179,6 +178,11 @@ def create_parser():
         help="Control watermark output mode: 'watermarked' (default) adds watermark to translated PDF, 'no_watermark' doesn't add watermark, 'both' outputs both versions.",
     )
     translation_group.add_argument(
+        "--max-pages-per-part",
+        type=int,
+        help="Maximum number of pages per part for split translation. If not set, no splitting will be performed.",
+    )
+    translation_group.add_argument(
         "--no-watermark",
         action="store_true",
         help="[DEPRECATED] Use --watermark-output-mode=no_watermark instead. Do not add watermark to the translated PDF.",
@@ -189,6 +193,24 @@ def create_parser():
         default=0.1,
         help="Progress report interval in seconds (default: 0.1)",
     )
+    translation_group.add_argument(
+        "--translate-table-text",
+        action="store_true",
+        default=False,
+        help="Translate table text (experimental)",
+    )
+    translation_group.add_argument(
+        "--show-char-box",
+        action="store_true",
+        default=False,
+        help="Show character box (debug only)",
+    )
+    translation_group.add_argument(
+        "--skip-scanned-detection",
+        action="store_true",
+        default=False,
+        help="Skip scanned document detection (speeds up processing for non-scanned documents)",
+    )
     # service option argument group
     service_group = translation_group.add_mutually_exclusive_group()
     service_group.add_argument(
@@ -196,13 +218,13 @@ def create_parser():
         action="store_true",
         help="Use OpenAI translator.",
     )
-    service_params.add_argument(
+    service_group.add_argument(
         "--openai-advanced",
         default=False,
         action="store_true",
         help="Use OpenAI advanced translator.",
     )
-    service_params.add_argument(
+    service_group.add_argument(
         "--google",
         action="store_true",
         help="Use Google translator.",
@@ -235,14 +257,6 @@ def create_parser():
         "-k",
         help="The API key for the OpenAI API.",
     )
-    service_group = parser.add_argument_group(
-        "Translation - Translate Options",
-        description="Translate specific options",
-    )
-    service_group.add_argument(
-        "--translate-url",
-        help="The base URL for the Translation API.",
-    )
 
     return parser
 
@@ -274,10 +288,8 @@ async def main():
         return
 
     # 验证翻译服务选择
-    if not (args.openai or args.openai_advanced or args.google or args.bing):
-        parser.error(
-            "必须选择一个翻译服务：--openai、--openai-advanced、--google 或 --bing"
-        )
+    if not (args.openai or args.translate or args.openai_advanced or args.google or args.bing):
+        parser.error("必须选择一个翻译服务：--openai 或 --translate")
 
     # 验证 OpenAI 参数
     if args.openai or args.openai_advanced and not args.openai_api_key:
@@ -302,25 +314,8 @@ async def main():
             api_key=args.openai_api_key,
             ignore_cache=args.ignore_cache,
         )
-    elif args.bing:
-        translator = BingTranslator(
-            lang_in=args.lang_in,
-            lang_out=args.lang_out,
-            ignore_cache=args.ignore_cache,
-        )
-    elif args.translate:
-        translator = TranslateTranslator(
-            lang_in=args.lang_in,
-            lang_out=args.lang_out,
-            ignore_cache=args.ignore_cache,
-            url=args.translate_url,
-        )
     else:
-        translator = GoogleTranslator(
-            lang_in=args.lang_in,
-            lang_out=args.lang_out,
-            ignore_cache=args.ignore_cache,
-        )
+        raise ValueError("Invalid translator type")
 
     # 设置翻译速率限制
     set_translate_rate_limiter(args.qps)
@@ -330,6 +325,11 @@ async def main():
         doc_layout_model = RpcDocLayoutModel(host=args.rpc_doclayout)
     else:
         doc_layout_model = DocLayoutModel.load_onnx()
+
+    if args.translate_table_text:
+        table_model = RapidOCRModel()
+    else:
+        table_model = None
 
     pending_files = []
     for file in args.files:
@@ -369,6 +369,12 @@ async def main():
     elif args.watermark_output_mode == "no_watermark":
         watermark_output_mode = WatermarkOutputMode.NoWatermark
 
+    split_strategy = None
+    if args.max_pages_per_part:
+        split_strategy = TranslationConfig.create_max_pages_per_part_split_strategy(
+            args.max_pages_per_part
+        )
+
     for file in pending_files:
         # 清理文件路径，去除两端的引号
         file = file.strip("\"'")
@@ -398,6 +404,10 @@ async def main():
             report_interval=args.report_interval,
             min_text_length=args.min_text_length,
             watermark_output_mode=watermark_output_mode,
+            split_strategy=split_strategy,
+            table_model=table_model,
+            show_char_box=args.show_char_box,
+            skip_scanned_detection=args.skip_scanned_detection,
         )
 
         # Create progress handler
@@ -413,6 +423,9 @@ async def main():
                     result = event["translate_result"]
                     logger.info(str(result))
                     break
+    logger.info(f"Total tokens: {translator.token_count.value}")
+    logger.info(f"Prompt tokens: {translator.prompt_token_count.value}")
+    logger.info(f"Completion tokens: {translator.completion_token_count.value}")
 
 
 def create_progress_handler(translation_config: TranslationConfig):
@@ -439,10 +452,11 @@ def create_progress_handler(translation_config: TranslationConfig):
 
         def progress_handler(event):
             if event["type"] == "progress_start":
-                stage_tasks[event["stage"]] = progress.add_task(
-                    f"{event['stage']}",
-                    total=event.get("stage_total", 100),
-                )
+                if event["stage"] not in stage_tasks:
+                    stage_tasks[event["stage"]] = progress.add_task(
+                        f"{event['stage']} ({event['part_index']}/{event['total_parts']})",
+                        total=event.get("stage_total", 100),
+                    )
             elif event["type"] == "progress_update":
                 stage = event["stage"]
                 if stage in stage_tasks:
@@ -450,7 +464,7 @@ def create_progress_handler(translation_config: TranslationConfig):
                         stage_tasks[stage],
                         completed=event["stage_current"],
                         total=event["stage_total"],
-                        description=f"{event['stage']}",
+                        description=f"{event['stage']} ({event['part_index']}/{event['total_parts']})",
                         refresh=True,
                     )
                 progress.update(
@@ -465,7 +479,7 @@ def create_progress_handler(translation_config: TranslationConfig):
                         stage_tasks[stage],
                         completed=event["stage_total"],
                         total=event["stage_total"],
-                        description=f"{event['stage']}",
+                        description=f"{event['stage']} ({event['part_index']}/{event['total_parts']})",
                         refresh=True,
                     )
                     progress.update(

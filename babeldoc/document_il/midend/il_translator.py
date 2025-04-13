@@ -1,10 +1,10 @@
-import concurrent.futures
 import json
 import logging
 import re
 from pathlib import Path
 from typing import List, Union
 
+import tiktoken
 from tqdm import tqdm
 
 from babeldoc.document_il import Document
@@ -22,6 +22,9 @@ from babeldoc.document_il.utils.layout_helper import get_char_unicode_string
 from babeldoc.document_il.utils.layout_helper import is_same_style
 from babeldoc.document_il.utils.layout_helper import is_same_style_except_font
 from babeldoc.document_il.utils.layout_helper import is_same_style_except_size
+from babeldoc.document_il.utils.priority_thread_pool_executor import (
+    PriorityThreadPoolExecutor,
+)
 from babeldoc.translation_config import TranslationConfig
 
 logger = logging.getLogger(__name__)
@@ -120,10 +123,22 @@ class ILTranslator:
         self,
         translate_engine: BaseTranslator,
         translation_config: TranslationConfig,
+        tokenizer=None,
     ):
         self.translate_engine = translate_engine
         self.translation_config = translation_config
         self.font_mapper = FontMapper(translation_config)
+
+        if tokenizer is None:
+            self.tokenizer = tiktoken.encoding_for_model("gpt-4o")
+        else:
+            self.tokenizer = tokenizer
+
+    def calc_token_count(self, text: str) -> int:
+        try:
+            return len(self.tokenizer.encode(text, disallowed_special=()))
+        except Exception:
+            return 0
 
     def translate(self, docs: Document):
         tracker = DocumentTranslateTracker()
@@ -133,7 +148,7 @@ class ILTranslator:
             self.stage_name,
             total,
         ) as pbar:
-            with concurrent.futures.ThreadPoolExecutor(
+            with PriorityThreadPoolExecutor(
                 max_workers=min(
                     self.translation_config.qps * 2,
                     self.translation_config.qps + 5,
@@ -152,7 +167,7 @@ class ILTranslator:
     def process_page(
         self,
         page: Page,
-        executor: concurrent.futures.ThreadPoolExecutor,
+        executor: PriorityThreadPoolExecutor,
         pbar: tqdm | None = None,
         tracker: PageTranslateTracker = None,
     ):
@@ -167,6 +182,7 @@ class ILTranslator:
                 for font in xobj.pdf_font:
                     page_xobj_font_map[xobj.xobj_id][font.font_id] = font
             # self.translate_paragraph(paragraph, pbar,tracker.new_paragraph(), page_font_map, page_xobj_font_map)
+            paragraph_token_count = self.calc_token_count(paragraph.unicode)
             executor.submit(
                 self.translate_paragraph,
                 paragraph,
@@ -174,6 +190,8 @@ class ILTranslator:
                 tracker.new_paragraph(),
                 page_font_map,
                 page_xobj_font_map,
+                priority=1048576 - paragraph_token_count,
+                paragraph_token_count=paragraph_token_count,
             )
 
     class TranslateInput:
@@ -344,13 +362,13 @@ class ILTranslator:
                 )
                 return None
 
-        # 如果占位符数量超过 50，且未禁用富文本翻译，则递归调用并禁用富文本翻译
-        if len(placeholders) > 50 and not disable_rich_text_translate:
-            logger.warning(
-                f"Too many placeholders ({len(placeholders)}) in paragraph[{paragraph.debug_id}], "
-                "disabling rich text translation for this paragraph",
-            )
-            return self.get_translate_input(paragraph, page_font_map, True)
+            # 如果占位符数量超过阈值，且未禁用富文本翻译，则递归调用并禁用富文本翻译
+            if len(placeholders) > 40 and not disable_rich_text_translate:
+                logger.warning(
+                    f"Too many placeholders ({len(placeholders)}) in paragraph[{paragraph.debug_id}], "
+                    "disabling rich text translation for this paragraph",
+                )
+                return self.get_translate_input(paragraph, page_font_map, True)
 
         text = get_char_unicode_string(chars)
         return self.TranslateInput(text, placeholders, paragraph.pdf_style)
@@ -432,11 +450,11 @@ class ILTranslator:
         combined_placeholder_pattern = "|".join(placeholder_patterns)
 
         def remove_placeholder(text: str):
-            return re.sub(combined_placeholder_pattern, "", text)
+            return re.sub(combined_placeholder_pattern, "", text, flags=re.IGNORECASE)
 
         # 找到所有匹配
         last_end = 0
-        for match in re.finditer(combined_pattern, output):
+        for match in re.finditer(combined_pattern, output, flags=re.IGNORECASE):
             # 处理匹配之前的普通文本
             if match.start() > last_end:
                 text = output[last_end : match.start()]
@@ -525,6 +543,56 @@ class ILTranslator:
 
         return result
 
+    def pre_translate_paragraph(
+        self,
+        paragraph: PdfParagraph,
+        tracker: ParagraphTranslateTracker,
+        page_font_map: dict[str, PdfFont],
+        xobj_font_map: dict[int, dict[str, PdfFont]],
+    ):
+        """Pre-translation processing: prepare text for translation."""
+        if paragraph.vertical:
+            return None, None
+        tracker.set_pdf_unicode(paragraph.unicode)
+        if paragraph.xobj_id in xobj_font_map:
+            page_font_map = xobj_font_map[paragraph.xobj_id]
+        translate_input = self.get_translate_input(paragraph, page_font_map)
+        if not translate_input:
+            return None, None
+        tracker.set_input(translate_input.unicode)
+        text = translate_input.unicode
+        if len(text) < self.translation_config.min_text_length:
+            logger.debug(
+                f"Text too short to translate, skip. Text: {text}. Paragraph id: {paragraph.debug_id}."
+            )
+            return None, None
+        return text, translate_input
+
+    def post_translate_paragraph(
+        self,
+        paragraph: PdfParagraph,
+        tracker: ParagraphTranslateTracker,
+        translate_input,
+        translated_text: str,
+    ):
+        """Post-translation processing: update paragraph with translated text."""
+        tracker.set_output(translated_text)
+        if translated_text == translate_input.unicode:
+            return False
+        paragraph.unicode = translated_text
+        paragraph.pdf_paragraph_composition = self.parse_translate_output(
+            translate_input, translated_text
+        )
+        for composition in paragraph.pdf_paragraph_composition:
+            if (
+                composition.pdf_same_style_unicode_characters
+                and composition.pdf_same_style_unicode_characters.pdf_style is None
+            ):
+                composition.pdf_same_style_unicode_characters.pdf_style = (
+                    paragraph.pdf_style
+                )
+        return True
+
     def translate_paragraph(
         self,
         paragraph: PdfParagraph,
@@ -532,55 +600,33 @@ class ILTranslator:
         tracker: ParagraphTranslateTracker = None,
         page_font_map: dict[str, PdfFont] = None,
         xobj_font_map: dict[int, dict[str, PdfFont]] = None,
+        paragraph_token_count: int = 0,
     ):
+        """Translate a paragraph using pre and post processing functions."""
         self.translation_config.raise_if_cancelled()
         with PbarContext(pbar):
             try:
-                if paragraph.vertical:
-                    return
-
-                tracker.set_pdf_unicode(paragraph.unicode)
-                if paragraph.xobj_id in xobj_font_map:
-                    page_font_map = xobj_font_map[paragraph.xobj_id]
-                translate_input = self.get_translate_input(paragraph, page_font_map)
-                if not translate_input:
-                    return
-
-                tracker.set_input(translate_input.unicode)
-
-                text = translate_input.unicode
-
-                if len(text) < self.translation_config.min_text_length:
-                    logger.debug(
-                        f"Text too short to translate, skip. Text: {text}. Paragraph id: {paragraph.debug_id}.",
-                    )
-                    return
-
-                translated_text = self.translate_engine.translate(text)
-                translated_text = re.sub(r"[. 。…]{20,}", ".", translated_text)
-
-                tracker.set_output(translated_text)
-
-                if translated_text == text:
-                    return
-
-                paragraph.unicode = translated_text
-                paragraph.pdf_paragraph_composition = self.parse_translate_output(
-                    translate_input,
-                    translated_text,
+                # Pre-translation processing
+                text, translate_input = self.pre_translate_paragraph(
+                    paragraph, tracker, page_font_map, xobj_font_map
                 )
-                for composition in paragraph.pdf_paragraph_composition:
-                    if (
-                        composition.pdf_same_style_unicode_characters
-                        and composition.pdf_same_style_unicode_characters.pdf_style
-                        is None
-                    ):
-                        composition.pdf_same_style_unicode_characters.pdf_style = (
-                            paragraph.pdf_style
-                        )
+                if text is None:
+                    return
+
+                # Perform translation
+                translated_text = self.translate_engine.translate(
+                    text,
+                    rate_limit_params={"paragraph_token_count": paragraph_token_count},
+                )
+                translated_text = re.sub(r"[. 。…，]{20,}", ".", translated_text)
+
+                # Post-translation processing
+                self.post_translate_paragraph(
+                    paragraph, tracker, translate_input, translated_text
+                )
             except Exception as e:
                 logger.exception(
-                    f"Error translating paragraph. Paragraph: {paragraph}. Error: {e}. ",
+                    f"Error translating paragraph. Paragraph: {paragraph.debug_id} ({paragraph.unicode}). Error: {e}. ",
                 )
                 # ignore error and continue
                 return

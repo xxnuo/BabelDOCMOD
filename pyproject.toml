@@ -1,10 +1,16 @@
 [project]
 name = "BabelDOC"
-version = "0.1.27"
+version = "0.3.7"
 description = "Yet Another Document Translator"
 license = "AGPL-3.0"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
+authors = [
+    { name = "awwaawwa", email = "aw@funstory.ai" }
+]
+maintainers = [
+    { name = "awwaawwa", email = "aw@funstory.ai" }
+]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
@@ -19,10 +25,10 @@ dependencies = [
     "onnx>=1.17.0",
     "onnxruntime>=1.16.1",
     "openai>=1.59.3",
-    "opencv-python>=4.10.0.84",
     "orjson>=3.10.14",
     "pdfminer-six>=20240706",
     "peewee>=3.17.8",
+    "psutil>=7.0.0",
     "pymupdf>=1.25.1",
     "rich>=13.9.4",
     "toml>=0.10.2",
@@ -32,7 +38,16 @@ dependencies = [
     "pydantic>=2.10.6",
     "tenacity>=9.0.0",
     "scikit-image>=0.25.2",
+    "freetype-py>=2.5.1",
+    "tiktoken>=0.9.0",
+    "python-levenshtein>=0.27.1",
+    "opencv-python-headless>=4.10.0.84",
+    "rapidocr-onnxruntime>=1.4.4",
 ]
+
+[project.optional-dependencies]
+directml = ["onnxruntime-directml>=1.16.1"]
+cuda = ["onnxruntime-gpu>=1.16.1"]
 
 [project.urls]
 Homepage = "https://github.com/funstory-ai/BabelDOC"
@@ -133,7 +148,7 @@ pythonpath = [".", "src"]
 testpaths = ["tests"]
 
 [bumpver]
-current_version = "0.1.27"
+current_version = "0.3.7"
 version_pattern = "MAJOR.MINOR.PATCH[.PYTAGNUM]"
 
 [bumpver.file_patterns]

@@ -26,6 +26,9 @@
   <a href="https://t.me/+Z9_SgnxmsmA5NzBl">
     <img src="https://img.shields.io/badge/Telegram-2CA5E0?style=flat-squeare&logo=telegram&logoColor=white"></a>
 </p>
+
+<a href="https://trendshift.io/repositories/13358" target="_blank"><img src="https://trendshift.io/api/badge/repositories/13358" alt="funstory-ai%2FBabelDOC | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+
 </div>
 
 PDF scientific paper translation and bilingual comparison library.
@@ -41,6 +44,10 @@ PDF scientific paper translation and bilingual comparison library.
 <div align="center">
 <img src="https://s.immersivetranslate.com/assets/r2-uploads/images/babeldoc-preview.png" width="80%"/>
 </div>
+
+## We are hiring
+
+See details: [EN](https://github.com/funstory-ai/jobs) | [ZH](https://github.com/funstory-ai/jobs/blob/main/README_ZH.md)
 
 ## Getting Started
 
@@ -89,16 +96,26 @@ uv run babeldoc --help
 3. Use the `uv run babeldoc` command. For example:
 
 ```bash
-uv run babeldoc --bing --files example.pdf
+uv run babeldoc --files example.pdf --openai --openai-model "gpt-4o-mini" --openai-base-url "https://api.openai.com/v1" --openai-api-key "your-api-key-here"
 
 # multiple files
-uv run babeldoc --bing --files example.pdf --files example2.pdf
+uv run babeldoc --files example.pdf --files example2.pdf --openai --openai-model "gpt-4o-mini" --openai-base-url "https://api.openai.com/v1" --openai-api-key "your-api-key-here"
 ```
 
 > [!TIP]
 > The absolute path is recommended.
 
 ## Advanced Options
+
+> [!NOTE]
+> This CLI is mainly for debugging purposes. Although end users can use this CLI to translate files, we do not provide any technical support for this purpose.
+>
+> End users should directly use **Online Service**: Beta version launched [Immersive Translate - BabelDOC](https://app.immersivetranslate.com/babel-doc/) 1000 free pages per month.
+>
+> End users who need self-deployment should use [PDFMathTranslate](https://github.com/Byaidu/PDFMathTranslate)
+> 
+> If you find that an option is not listed below, it means that this option is a debugging option for maintainers. Please do not use these options.
+
 
 ### Language Options
 
@@ -124,13 +141,18 @@ uv run babeldoc --bing --files example.pdf --files example2.pdf
 - `--enhance-compatibility`: Enable all compatibility enhancement options (equivalent to --skip-clean --dual-translate-first --disable-rich-text-translate)
 - `--use-alternating-pages-dual`: Use alternating pages mode for dual PDF. When enabled, original and translated pages are arranged in alternate order. When disabled (default), original and translated pages are shown side by side on the same page.
 - `--watermark-output-mode`: Control watermark output mode: 'watermarked' (default) adds watermark to translated PDF, 'no_watermark' doesn't add watermark, 'both' outputs both versions.
+- `--max-pages-per-part`: Maximum number of pages per part for split translation. If not set, no splitting will be performed.
 - `--no-watermark`: [DEPRECATED] Use --watermark-output-mode=no_watermark instead.
+- `--translate-table-text`: Translate table text (experimental, default: False)
+- `--skip-scanned-detection`: Skip scanned document detection (default: False). When using split translation, only the first part performs detection if not skipped.
 
 > [!TIP]
 > - Both `--skip-clean` and `--dual-translate-first` may help improve compatibility with some PDF readers
 > - `--disable-rich-text-translate` can also help with compatibility by simplifying translation input
 > - However, using `--skip-clean` will result in larger file sizes
 > - If you encounter any compatibility issues, try using `--enhance-compatibility` first
+> - Use `--max-pages-per-part` for large documents to split them into smaller parts for translation and automatically merge them back.
+> - Use `--skip-scanned-detection` to speed up processing when you know your document is not a scanned PDF.
 
 ### Translation Service Options
 
@@ -140,14 +162,13 @@ uv run babeldoc --bing --files example.pdf --files example2.pdf
 - `--no-mono`: Do not output monolingual PDF files
 - `--min-text-length`: Minimum text length to translate (default: 5)
 - `--openai`: Use OpenAI for translation (default: False)
-- `--bing`: Use Bing for translation (default: False)
-- `--google`: Use Google Translate for translation (default: False)
 
 > [!TIP]
 >
-> 1. You must specify one translation service among `--openai`, `--bing`, `--google`.
+> 1. Currently, only OpenAI-compatible LLM is supported. For more translator support, please use [PDFMathTranslate](https://github.com/Byaidu/PDFMathTranslate).
 > 2. It is recommended to use models with strong compatibility with OpenAI, such as: `glm-4-flash`, `deepseek-chat`, etc.
 > 3. Currently, it has not been optimized for traditional translation engines like Bing/Google, it is recommended to use LLMs.
+> 4. You can use [litellm](https://github.com/BerriAI/litellm) to access multiple models.
 
 ### OpenAI Specific Options
 
@@ -190,38 +211,12 @@ Example Configuration:
 
 ```toml
 [babeldoc]
-debug = true
-lang-in = "en-US"
-lang-out = "zh-CN"
-qps = 20
-# this is a comment
-# pages = 4
-openai = true
-openai-model = "SOME_ALSOME_MODEL"
-openai-base-url = "https://example.example/v1"
-openai-api-key = "[KEY]"
-# Offline assets management
-# generate-offline-assets = "/path/to/output/dir"
-# restore-offline-assets = "/path/to/offline_assets_package.zip"
-# All other options can also be set in the configuration file.
-```
-
-For a more comprehensive configuration example with offline assets management:
-
-```toml
-[babeldoc]
 # Basic settings
 debug = true
 lang-in = "en-US"
 lang-out = "zh-CN"
 qps = 10
 output = "/path/to/output/dir"
-
-# Translation service
-openai = true
-openai-model = "gpt-4o-mini"
-openai-base-url = "https://api.openai.com/v1"
-openai-api-key = "your-api-key-here"
 
 # PDF processing options
 split-short-lines = false
@@ -231,7 +226,15 @@ dual-translate-first = false
 disable-rich-text-translate = false
 use-alternating-pages-dual = false
 watermark-output-mode = "watermarked"  # Choices: "watermarked", "no_watermark", "both"
+max-pages-per-part = 50  # Automatically split the document for translation and merge it back.
 # no-watermark = false  # DEPRECATED: Use watermark-output-mode instead
+skip-scanned-detection = false  # Skip scanned document detection for faster processing
+
+# Translation service
+openai = true
+openai-model = "gpt-4o-mini"
+openai-base-url = "https://api.openai.com/v1"
+openai-api-key = "your-api-key-here"
 
 # Output control
 no-dual = false
@@ -246,6 +249,12 @@ report-interval = 0.5
 ```
 
 ## Python API
+
+> [!TIP]
+>
+> 1. Before pdf2zh 2.0 is released, you can temporarily use BabelDOC's Python API. However, after pdf2zh 2.0 is released, please directly use pdf2zh's Python API.
+>
+> 2. This project's Python API does not guarantee any compatibility. However, the Python API from pdf2zh will guarantee a certain level of compatibility.
 
 You can refer to the example in [main.py](https://github.com/funstory-ai/yadt/blob/main/babeldoc/main.py) to use BabelDOC's Python API.
 
@@ -334,6 +343,7 @@ And meet the following requirements:
 1. Parsing errors in the author and reference sections; they get merged into one paragraph after translation.
 2. Lines are not supported.
 3. Does not support drop caps.
+4. Large pages will be skipped.
 
 ## How to Contribute
 
@@ -350,6 +360,7 @@ Everyone interacting in YADT and its sub-projects' codebases, issue trackers, ch
 - [pdfminer](https://github.com/pdfminer/pdfminer.six)
 - [PyMuPDF](https://github.com/pymupdf/PyMuPDF)
 - [Asynchronize](https://github.com/multimeric/Asynchronize/tree/master?tab=readme-ov-file)
+- [PriorityThreadPoolExecutor](https://github.com/oleglpts/PriorityThreadPoolExecutor)
 
 <h2 id="star_hist">Star History</h2>
 

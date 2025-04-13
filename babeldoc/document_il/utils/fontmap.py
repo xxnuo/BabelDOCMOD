@@ -60,11 +60,6 @@ class FontMapper:
             f.font_id: f for f in self.fonts.values()
         }
 
-        for font in self.fontid2font.values():
-            font.char_lengths = functools.lru_cache(maxsize=10240, typed=True)(
-                font.char_lengths,
-            )
-
         self.fontid2font["base"] = self.fontid2font[self.base_font_ids[0]]
 
         self.normal_fonts: list[pymupdf.Font] = [
@@ -109,6 +104,8 @@ class FontMapper:
         char_unicode: str,
         font_type: str,
     ):
+        if font_type == "script" and not italic:
+            return None
         current_char = ord(char_unicode)
         for font in self.type2font[font_type]:
             if not font.has_glyph(current_char):
@@ -144,6 +141,12 @@ class FontMapper:
             )
             return None
 
+        script_font_map_result = self.map_in_type(
+            bold, italic, monospaced, serif, char_unicode, "script"
+        )
+        if script_font_map_result:
+            return script_font_map_result
+
         for script_font in self.script_fonts:
             if italic and script_font.has_glyph(current_char):
                 return script_font
@@ -160,9 +163,13 @@ class FontMapper:
         if fallback_font_map_result is not None:
             return fallback_font_map_result
 
+        for font in self.fallback_fonts:
+            if font.has_glyph(current_char):
+                return font
+
         logger.warning(
             f"Can't find font for {char_unicode}({current_char}). "
-            f"Original font: {original_font}. "
+            f"Original font: {original_font.name}[{original_font.font_id}]. "
             f"Char unicode: {char_unicode}. ",
         )
         return None
@@ -172,10 +179,14 @@ class FontMapper:
 
         font_id = {}
         xreflen = doc_zh.xref_length()
+        total = xreflen - 1 + len(font_list) + len(il.page) + len(font_list)
         with self.translation_config.progress_monitor.stage_start(
             self.stage_name,
-            xreflen - 1 + len(font_list) + len(il.page) + len(font_list),
+            total,
         ) as pbar:
+            if not il.page:
+                pbar.advance(total)
+                return
             for font in font_list:
                 if font[0] in font_id:
                     continue
@@ -183,6 +194,11 @@ class FontMapper:
                 pbar.advance(1)
             for xref in range(1, xreflen):
                 pbar.advance(1)
+                # xref_type = doc_zh.xref_get_key(xref, "Type")
+                # if xref_type[1] == "/Page":
+                #     resources_xref = doc_zh.xref_get_key(xref, "Resources")
+                #     if resources_xref[0] == 'null':
+                #         doc_zh.xref_set_key(xref, "Resources", f"<</Font<<>>>>")
                 for label in ["Resources/", ""]:  # 可能是基于 xobj 的 res
                     try:  # xref 读写可能出错
                         font_res = doc_zh.xref_get_key(xref, f"{label}Font")

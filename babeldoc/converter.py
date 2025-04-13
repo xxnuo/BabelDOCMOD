@@ -99,7 +99,7 @@ class PDFConverterEx(PDFConverter):
                 font_name = font_name.decode("utf-8")
             except UnicodeDecodeError:
                 font_name = "BASE64:" + base64.b64encode(font_name).decode("utf-8")
-        font_id = self.il_creater.current_page_font_name_id_map[font_name]
+        font_id = self.il_creater.current_page_font_name_id_map.get(font_name, None)
 
         item = AWLTChar(
             matrix,
@@ -282,7 +282,12 @@ class TranslateConverter(PDFConverterEx):
         # A. 原文档解析
         for child in ltpage:
             if isinstance(child, LTChar):
-                self.il_creater.on_lt_char(child)
+                try:
+                    self.il_creater.on_lt_char(child)
+                except Exception:
+                    log.exception(
+                        'Error processing LTChar',
+                    )
                 continue
                 cur_v = False
                 layout = self.layout[ltpage.pageid]

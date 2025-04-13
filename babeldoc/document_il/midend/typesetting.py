@@ -1,3 +1,4 @@
+import copy
 import logging
 import re
 import statistics
@@ -30,6 +31,7 @@ class TypesettingUnit:
         formular: PdfFormula = None,
         unicode: str = None,
         font: pymupdf.Font | None = None,
+        original_font: il_version_1.PdfFont | None = None,
         font_size: float = None,
         style: PdfStyle = None,
         xobj_id: int = None,
@@ -60,6 +62,11 @@ class TypesettingUnit:
             else:
                 self.font_id = "base"
                 self.unicode = " "
+            if original_font:
+                self.original_font = original_font
+            else:
+                self.original_font = None
+
             self.font_size = font_size
             self.style = style
             self.xobj_id = xobj_id
@@ -90,7 +97,23 @@ class TypesettingUnit:
         unicode = self.try_get_unicode()
         if not unicode:
             return True
-        if re.match(r"^[a-zA-Z0-9]+$", unicode):
+        if re.match(
+            r"^["
+            r"a-z"
+            r"A-Z"
+            r"0-9"
+            r"\u00C0-\u00FF"  # Latin-1 Supplement
+            r"\u0100-\u017F"  # Latin Extended A
+            r"\u0180-\u024F"  # Latin Extended B
+            r"\u1E00-\u1EFF"  # Latin Extended Additional
+            r"\u2C60-\u2C7F"  # Latin Extended C
+            r"\uA720-\uA7FF"  # Latin Extended D
+            r"\uAB30-\uAB6F"  # Latin Extended E
+            r"\u0250-\u02A0"  # IPA Extensions
+            r"\u0400-\u04FF"  # Cyrillic
+            r"]+$",
+            unicode,
+        ):
             return False
         return True
 
@@ -307,13 +330,16 @@ class TypesettingUnit:
         elif self.formular:
             # 创建新的公式对象，保持内部字符的相对位置
             new_chars = []
-            min_x = min(char.box.x for char in self.formular.pdf_character)
-            min_y = min(char.box.y for char in self.formular.pdf_character)
+            min_x = min(char.visual_bbox.box.x for char in self.formular.pdf_character)
+            min_y = min(char.visual_bbox.box.y for char in self.formular.pdf_character)
 
             for char in self.formular.pdf_character:
                 # 计算相对位置
                 rel_x = char.box.x - min_x
                 rel_y = char.box.y - min_y
+
+                visual_rel_x = char.visual_bbox.box.x - min_x
+                visual_rel_y = char.visual_bbox.box.y - min_y
 
                 # 创建新的字符对象
                 new_char = PdfCharacter(
@@ -329,6 +355,26 @@ class TypesettingUnit:
                         + (rel_y + (char.box.y2 - char.box.y) + self.formular.y_offset)
                         * scale,
                     ),
+                    visual_bbox=il_version_1.VisualBbox(
+                        box=Box(
+                            x=x + visual_rel_x * scale,
+                            y=y + visual_rel_y * scale,
+                            x2=x
+                            + (
+                                visual_rel_x
+                                + (char.visual_bbox.box.x2 - char.visual_bbox.box.x)
+                                + self.formular.x_offset
+                            )
+                            * scale,
+                            y2=y
+                            + (
+                                visual_rel_y
+                                + (char.visual_bbox.box.y2 - char.visual_bbox.box.y)
+                                + self.formular.y_offset
+                            )
+                            * scale,
+                        ),
+                    ),
                     pdf_style=PdfStyle(
                         font_id=char.pdf_style.font_id,
                         font_size=char.pdf_style.font_size * scale,
@@ -341,10 +387,10 @@ class TypesettingUnit:
                 new_chars.append(new_char)
 
             # Calculate bounding box from new_chars
-            min_x = min(char.box.x for char in new_chars)
-            min_y = min(char.box.y for char in new_chars)
-            max_x = max(char.box.x2 for char in new_chars)
-            max_y = max(char.box.y2 for char in new_chars)
+            min_x = min(char.visual_bbox.box.x for char in new_chars)
+            min_y = min(char.visual_bbox.box.y for char in new_chars)
+            max_x = max(char.visual_bbox.box.x2 for char in new_chars)
+            max_y = max(char.visual_bbox.box.y2 for char in new_chars)
 
             new_formula = PdfFormula(
                 box=Box(
@@ -364,6 +410,7 @@ class TypesettingUnit:
             new_unit = TypesettingUnit(
                 unicode=self.unicode,
                 font=self.font,
+                original_font=self.original_font,
                 font_size=self.font_size * scale,
                 style=self.style,
                 xobj_id=self.xobj_id,
@@ -392,6 +439,13 @@ class TypesettingUnit:
             assert self.scale is not None, (
                 "scale must be set, should be set by `relocate`"
             )
+            x = self.x
+            y = self.y
+            # if self.original_font and self.font and hasattr(self.original_font, "descent") and hasattr(self.font, "descent_fontmap"):
+            #     original_descent = self.original_font.descent
+            #     new_descent = self.font.descent_fontmap
+            #     y -= (original_descent - new_descent) * self.font_size / 1000
+
             # 计算字符宽度
             char_width = self.width
 
@@ -399,10 +453,10 @@ class TypesettingUnit:
                 pdf_character_id=self.font.has_glyph(ord(self.unicode)),
                 char_unicode=self.unicode,
                 box=Box(
-                    x=self.x,  # 使用存储的位置
-                    y=self.y,
-                    x2=self.x + char_width,
-                    y2=self.y + self.font_size,
+                    x=x,  # 使用存储的位置
+                    y=y,
+                    x2=x + char_width,
+                    y2=y + self.font_size,
                 ),
                 pdf_style=PdfStyle(
                     font_id=self.font_id,
@@ -566,18 +620,28 @@ class Typesetting:
             self.font_mapper.base_font.char_lengths("你", font_size * scale)[0] * 0.5
         )
 
-        # 计算平均行高
-        avg_height = (
-            sum(unit.height * scale for unit in typesetting_units)
-            / len(typesetting_units)
-            if typesetting_units
-            else 0
+        # 计算行高（使用众数）
+        unit_heights = (
+            [unit.height for unit in typesetting_units] if typesetting_units else []
         )
+        if not unit_heights:
+            avg_height = 0
+        elif len(unit_heights) == 1:
+            avg_height = unit_heights[0] * scale
+        else:
+            try:
+                avg_height = statistics.mode(unit_heights) * scale
+            except statistics.StatisticsError:
+                # 如果没有众数（所有值都出现相同次数），则使用平均值
+                avg_height = sum(unit_heights) / len(unit_heights) * scale
 
         # 初始化位置为右上角，并减去一个平均行高
         current_x = box.x
         current_y = box.y2 - avg_height
+        box = copy.deepcopy(box)
+        box.y -= avg_height * (line_spacing - 1)
         line_height = 0
+        current_line_heights = []  # 存储当前行所有元素的高度
 
         # 存储已排版的单元
         typeset_units = []
@@ -643,8 +707,13 @@ class Typesetting:
             ):
                 # 换行
                 current_x = box.x
-                current_y -= line_height * line_spacing
+                if not current_line_heights:
+                    return [], False
+                max_height = max(current_line_heights)
+
+                current_y -= max(line_height * line_spacing, max_height * 1.05)
                 line_height = 0.0
+                current_line_heights = []  # 清空当前行高度列表
 
                 # 检查是否超出底部边界
                 if current_y - unit_height < box.y:
@@ -659,15 +728,24 @@ class Typesetting:
             relocated_unit = unit.relocate(current_x, current_y, scale)
             typeset_units.append(relocated_unit)
 
-            # workaround: 超长行距暂时没找到具体原因，有待进一步修复。这里的 1.2 是魔法数字！
-            # 更新当前行的最大高度
-            if line_height == 0 or line_height * 1.2 > unit_height > line_height:
-                line_height = unit_height
+            # 添加当前单元的高度到当前行高度列表
+            current_line_heights.append(unit_height)
+
+            # 计算当前行的行高
+            if current_line_heights:
+                mode_height = statistics.mode(current_line_heights)
+                line_height = mode_height
 
             # 更新 x 坐标
             current_x = relocated_unit.box.x2
 
             last_unit = relocated_unit
+
+        # 处理最后一行的行高
+        if current_line_heights:
+            mode_height = statistics.mode(current_line_heights)
+            max_height = max(current_line_heights)
+            line_height = max(mode_height, max_height)
 
         return typeset_units, all_units_fit
 
@@ -680,10 +758,10 @@ class Typesetting:
     ):
         box = paragraph.box
         scale = 1.0
-        line_spacing = 1.5  # 初始行距为 1.7
+        line_spacing = 1.7  # 初始行距为 1.7
         min_scale = 0.1  # 最小缩放因子
         min_line_spacing = 1.4  # 最小行距
-        expand_space_flag = False
+        expand_space_flag = 0  # 0: 未扩展, 1: 已向下扩展, 2: 已向右扩展
 
         while scale >= min_scale:
             # 尝试布局排版单元
@@ -708,22 +786,6 @@ class Typesetting:
                         )
                 return
 
-            if not expand_space_flag:
-                # 如果尚未扩展空格，进行扩展
-                max_x = self.get_max_right_space(box, page)
-                # 只有当有额外空间时才扩展
-                if max_x > box.x2:
-                    expanded_box = Box(
-                        x=box.x,
-                        y=box.y,
-                        x2=max_x,  # 直接扩展到最大可用位置
-                        y2=box.y2,
-                    )
-                    # 更新段落的边界框
-                    paragraph.box = expanded_box
-                expand_space_flag = True
-                continue
-
             # 如果当前行距大于最小行距，先减小行距
             if line_spacing > min_line_spacing:
                 line_spacing -= 0.1
@@ -733,12 +795,43 @@ class Typesetting:
                     scale -= 0.05
                 else:
                     scale -= 0.1
-                line_spacing = 1.5  # 重置行距
+                line_spacing = 1.7  # 重置行距
 
             if scale < 0.7 and min_line_spacing > 1.1:
+                if expand_space_flag == 0:
+                    # 先尝试向下扩展
+                    min_y = self.get_max_bottom_space(box, page)
+                    if min_y < box.y:
+                        expanded_box = Box(
+                            x=box.x,
+                            y=min_y,
+                            x2=box.x2,
+                            y2=box.y2,
+                        )
+                        # 更新段落的边界框
+                        paragraph.box = expanded_box
+                        box = expanded_box
+                    expand_space_flag = 1
+                    continue
+                elif expand_space_flag == 1:
+                    # 如果向下扩展后还不够，再尝试向右扩展
+                    max_x = self.get_max_right_space(box, page)
+                    if max_x > box.x2:
+                        expanded_box = Box(
+                            x=box.x,
+                            y=box.y,
+                            x2=max_x,
+                            y2=box.y2,
+                        )
+                        # 更新段落的边界框
+                        paragraph.box = expanded_box
+                        box = expanded_box
+                    expand_space_flag = 2
+                    continue
+
                 min_line_spacing = 1.1
                 scale = 1.0
-                line_spacing = 1.5
+                line_spacing = 1.7
         # 如果仍然放不下，则尝试去除英文换行限制
         if use_english_line_break:
             self.retypeset(
@@ -787,9 +880,15 @@ class Typesetting:
                     ],
                 )
             elif composition.pdf_same_style_unicode_characters:
-                font_id = (
-                    composition.pdf_same_style_unicode_characters.pdf_style.font_id
-                )
+                style = composition.pdf_same_style_unicode_characters.pdf_style
+                if style is None:
+                    logger.warning(
+                        f"Style is None. "
+                        f"Composition: {composition}. "
+                        f"Paragraph: {paragraph}. ",
+                    )
+                    continue
+                font_id = style.font_id
                 font = get_font(font_id, paragraph.xobj_id)
                 result.extend(
                     [
@@ -799,8 +898,9 @@ class Typesetting:
                                 font,
                                 char_unicode,
                             ),
-                            font_size=composition.pdf_same_style_unicode_characters.pdf_style.font_size,
-                            style=composition.pdf_same_style_unicode_characters.pdf_style,
+                            original_font=font,
+                            font_size=style.font_size,
+                            style=style,
                             xobj_id=paragraph.xobj_id,
                             debug_info=composition.pdf_same_style_unicode_characters.debug_info,
                         )
@@ -857,7 +957,6 @@ class Typesetting:
         Returns:
             可以扩展到的最大 x 坐标
         """
-        # TODO: try to find right margin of page
         # 获取页面的裁剪框作为初始最大限制
         max_x = page.cropbox.box.x2 * 0.9
 
@@ -870,7 +969,11 @@ class Typesetting:
                 para.box.y >= current_box.y2 or para.box.y2 <= current_box.y
             ):
                 max_x = min(max_x, para.box.x)
-
+        for char in page.pdf_character:
+            if char.box.x > current_box.x and not (
+                char.box.y >= current_box.y2 or char.box.y2 <= current_box.y
+            ):
+                max_x = min(max_x, char.box.x)
         # 检查图形
         for figure in page.pdf_figure:
             if figure.box.x > current_box.x and not (
@@ -879,3 +982,39 @@ class Typesetting:
                 max_x = min(max_x, figure.box.x)
 
         return max_x
+
+    def get_max_bottom_space(self, current_box: Box, page: il_version_1.Page) -> float:
+        """获取段落下方最大可用空间
+
+        Args:
+            current_box: 当前段落的边界框
+            page: 当前页面
+
+        Returns:
+            可以扩展到的最小 y 坐标
+        """
+        # 获取页面的裁剪框作为初始最小限制
+        min_y = page.cropbox.box.y * 1.1
+
+        # 检查所有可能的阻挡元素
+        for para in page.pdf_paragraph:
+            if para.box == current_box or para.box is None:  # 跳过当前段落
+                continue
+            # 只考虑在当前段落下方且有水平重叠的元素
+            if para.box.y2 < current_box.y and not (
+                para.box.x >= current_box.x2 or para.box.x2 <= current_box.x
+            ):
+                min_y = max(min_y, para.box.y2)
+        for char in page.pdf_character:
+            if char.box.y2 < current_box.y and not (
+                char.box.x >= current_box.x2 or char.box.x2 <= current_box.x
+            ):
+                min_y = max(min_y, char.box.y2)
+        # 检查图形
+        for figure in page.pdf_figure:
+            if figure.box.y2 < current_box.y and not (
+                figure.box.x >= current_box.x2 or figure.box.x2 <= current_box.x
+            ):
+                min_y = max(min_y, figure.box.y2)
+
+        return min_y
