@@ -8,8 +8,8 @@ __version__ = "0.3.11"
 CACHE_FOLDER = Path.home() / ".cache" / "babeldoc"
 
 import sys  # noqa: E402, I001
-ROOT_DIR: str = str(Path(os.getenv("ROOT_DIR", Path(sys.argv[0]).parent)).resolve())
-CACHE_FOLDER = Path(ROOT_DIR) / "data" / "cache"
+ROOT_DIR: str = os.path.abspath(os.getenv("ROOT_DIR", os.path.dirname(sys.argv[0])))
+CACHE_FOLDER = Path(os.path.join(ROOT_DIR, "data/cache"))
 
 def get_cache_file_path(filename: str, sub_folder: str | None = None) -> Path:
     if sub_folder is not None:
