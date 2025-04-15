@@ -269,3 +269,214 @@ class OpenAITranslator(BaseTranslator):
 
     def get_rich_text_right_placeholder(self, placeholder_id: int):
         return self.get_formular_placeholder(placeholder_id + 1)
+
+class OpenAIAdvancedTranslator(OpenAITranslator):
+    # https://github.com/openai/openai-python
+    name = "openai_advanced"
+
+    advanced_lang_map = {
+        "en": "英语",
+        "en-US": "英语",
+        "zh-CN": "简体中文",
+        "zh": "简体中文",
+        "zh-TW": "繁体中文",
+        "ja": "日语",
+        "ko": "韩语",
+        "ru": "俄语",
+        "fr": "法语",
+        "de": "德语",
+        "it": "意大利语",
+        "es": "西班牙语",
+    }
+
+    def __init__(
+        self,
+        lang_in,
+        lang_out,
+        model,
+        base_url=None,
+        api_key=None,
+        ignore_cache=False,
+        qps: int = 200,
+        dict_names: list[str] = None,
+        temp_dict: dict[str, str] = None,
+    ):
+        super().__init__(lang_in=lang_in, lang_out=lang_out, model=model, base_url=base_url, api_key=api_key, ignore_cache=ignore_cache)
+        self.add_cache_impact_parameters("dict_names", dict_names)
+        self.add_cache_impact_parameters("temp_dict", temp_dict)
+        set_translate_rate_limiter(qps)
+
+    def translate(self, text, ignore_cache=False, rate_limit_params: dict = None, dictionary: dict[str, str] = None):
+        """
+        Translate the text, and the other part should call this method.
+        :param text: text to translate
+        :return: translated text
+        """
+        self.translate_call_count += 1
+        if not (self.ignore_cache or ignore_cache):
+            cache = self.cache.get(text)
+            if cache is not None:
+                self.translate_cache_call_count += 1
+                return cache
+        _translate_rate_limiter.wait()
+        translation = self.do_translate(text, rate_limit_params, dictionary)
+        if not (self.ignore_cache or ignore_cache):
+            self.cache.set(text, translation)
+        return translation
+
+    @retry(
+        retry=retry_if_exception_type(openai.RateLimitError),
+        stop=stop_after_attempt(100),
+        wait=wait_exponential(multiplier=1, min=1, max=15),
+        before_sleep=lambda retry_state: logger.warning(
+            f"RateLimitError, retrying in {retry_state.next_action.sleep} seconds... "
+            f"(Attempt {retry_state.attempt_number}/100)"
+        ),
+    )
+    def do_translate(self, text, rate_limit_params: dict = None, dictionary: dict[str, str] = None) -> str:
+        response = self.client.chat.completions.create(
+            model=self.model,
+            **self.options,
+            messages=self.prompt(text, dictionary),
+        )
+        self.token_count.inc(response.usage.total_tokens)
+        self.prompt_token_count.inc(response.usage.prompt_tokens)
+        self.completion_token_count.inc(response.usage.completion_tokens)
+        return response.choices[0].message.content.strip()
+
+    def prompt(self, text, dictionary: dict[str, str] = None):
+        is_auto_lang = self.lang_in == ""
+        in_lang_part = (
+            "任何" if is_auto_lang else f"{self.advanced_lang_map[self.lang_in]}"
+        )
+        # 生成非目标语言处理说明
+        out_lang_part = (
+            f"{self.advanced_lang_map[self.lang_out]}"
+            if is_auto_lang
+            else f"{self.advanced_lang_map[self.lang_out]}, 源文本中非{self.advanced_lang_map[self.lang_in]}的部分内容直接使用原文作为译文"
+        )
+        if dictionary:
+            dictionary_part = "\n\n参考术语:\n" + "\n".join(
+                f"{k}: {v}" for k, v in dictionary.items()
+            )
+        else:
+            dictionary_part = ""
+        
+        return [
+            {
+                "role": "system",
+                "content": rf"""你是一位专业的多语言法律领域翻译专家. 请遵循以下指南:
+1. 翻译原则
+- 严格遵循法律用语的专业性和严谨性
+- 准确传达法律条款的权利义务关系
+- 保持法律术语的规范性和一致性
+- 确保译文符合目标语言的法律表述习惯
+2. 基本要求
+- 严格保持原文的格式,标点和段落结构
+- 保留所有数学公式,代码等特殊标记
+- 使用权威法律词典和判例中的标准译法
+- 在保证法律含义准确的前提下使译文通顺
+- 对合同主体,权利义务,期限等关键内容的翻译尤其谨慎
+3. 特殊情况处理
+- 遇到不确定或多种译法的术语,选择最合适的译法
+- 遇到文化差异内容和语气词,使用目标语言的习惯表达
+- 遇到短词组或单个词语,如无上下文,选择最常用的译法
+- 遇到短文本,如无上下文,选择最常用的译法{dictionary_part}
+""",
+            },
+            {
+                "role": "user",
+                "content": f";; 将用户在下一行输入的{in_lang_part}内容翻译成{out_lang_part}.仅输出译文,如果是不必要的翻译(例如专有名词、代码、{'{{1}}, 等'}),返回原文.不要解释,不要备注.输入内容:",
+            },
+            {
+                "role": "user",
+                "content": text,
+            },
+        ]
+
+    @retry(
+        retry=retry_if_exception_type(openai.RateLimitError),
+        stop=stop_after_attempt(100),
+        wait=wait_exponential(multiplier=1, min=1, max=15),
+        before_sleep=lambda retry_state: logger.warning(
+            f"RateLimitError, retrying in {retry_state.next_action.sleep} seconds... "
+            f"(Attempt {retry_state.attempt_number}/100)"
+        ),
+    )
+    def do_llm_translate(self, text, rate_limit_params: dict = None, dictionary: dict[str, str] = None):
+        if text is None:
+            return None
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            **self.options,
+            messages=[
+                {
+                    "role": "user",
+                    "content": text,
+                },
+            ],
+        )
+        self.token_count.inc(response.usage.total_tokens)
+        self.prompt_token_count.inc(response.usage.prompt_tokens)
+        self.completion_token_count.inc(response.usage.completion_tokens)
+        return response.choices[0].message.content.strip()
+
+    def get_formular_placeholder(self, placeholder_id: int):
+        return "{{v" + str(placeholder_id) + "}}"
+        return "{{" + str(placeholder_id) + "}}"
+
+    def get_rich_text_left_placeholder(self, placeholder_id: int):
+        return self.get_formular_placeholder(placeholder_id)
+
+    def get_rich_text_right_placeholder(self, placeholder_id: int):
+        return self.get_formular_placeholder(placeholder_id + 1)
+
+if __name__ == "__main__":
+    translator = OpenAIAdvancedTranslator(
+        lang_in="zh-CN",
+        lang_out="en-US",
+        # model="qwen2-instruct",
+        model="Qwen/Qwen2.5-72B-Instruct",
+        # base_url="http://127.0.0.1:9997/v1",
+        base_url="https://api.siliconflow.cn/v1",
+        # api_key="EMPTY",
+        api_key="sk-kxyyqvlclkbswvrnzyzjdzxoarunqjunjylvdeutleaxwhoi",
+    )
+    texts = [
+        "与",
+        "关于",
+        "之",
+        "定义",
+        "终止",
+        "兹此",
+        "用途",
+        "B",
+        "C",
+        "G",
+        "J",
+        "元",
+        "啊",
+        "软件许可所有权",
+        "甲方",
+        "乙方",
+        "丙方",
+        "丁方",
+        "我是经过 UFCC 许可认证的。",
+        ", You have no permission",
+        ", You have no permission {1}",
+        "你没有许可 {1}",
+    ]
+    for text in texts:
+        print(
+            translator.translate(
+                text,
+                dictionary={
+                    "与": "and",
+                    "关于": "about",
+                    "之": "of",
+                },
+            )
+        )
+
+    # 测试临时词典
