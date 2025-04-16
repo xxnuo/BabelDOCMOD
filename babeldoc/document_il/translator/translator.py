@@ -219,6 +219,7 @@ class OpenAITranslator(BaseTranslator):
         self.completion_token_count = AtomicInteger()
 
         # Advanced features
+        self.ignore_cache = ignore_cache
         self.add_cache_impact_parameters("dict_names", dict_names)
         self.add_cache_impact_parameters("temp_dict", temp_dict)
         set_translate_rate_limiter(qps)
@@ -348,12 +349,14 @@ class OpenAITranslator(BaseTranslator):
         if text is None:
             return None
 
-        if dictionary is None:
-            dictionary = (
-                self.vocab.match_by_lang(text, self.lang_out)
-                if self.vocab
-                else None
-            )
+        print(text)
+
+        # if dictionary is None:
+        #     dictionary = (
+        #         self.vocab.match_by_lang(text, self.lang_out)
+        #         if self.vocab
+        #         else None
+        #     )
 
         if dictionary:
             dictionary_part = "\n\n参考术语:\n" + "\n".join(
