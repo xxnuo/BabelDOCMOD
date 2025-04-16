@@ -180,100 +180,6 @@ class OpenAITranslator(BaseTranslator):
     # https://github.com/openai/openai-python
     name = "openai"
 
-    def __init__(
-        self,
-        lang_in,
-        lang_out,
-        model,
-        base_url=None,
-        api_key=None,
-        ignore_cache=False,
-    ):
-        super().__init__(lang_in, lang_out, ignore_cache)
-        self.options = {"temperature": 0}  # 随机采样可能会打断公式标记
-        self.client = openai.OpenAI(base_url=base_url, api_key=api_key)
-        self.add_cache_impact_parameters("temperature", self.options["temperature"])
-        self.model = model
-        self.add_cache_impact_parameters("model", self.model)
-        self.add_cache_impact_parameters("prompt", self.prompt(""))
-        self.token_count = AtomicInteger()
-        self.prompt_token_count = AtomicInteger()
-        self.completion_token_count = AtomicInteger()
-
-    @retry(
-        retry=retry_if_exception_type(openai.RateLimitError),
-        stop=stop_after_attempt(100),
-        wait=wait_exponential(multiplier=1, min=1, max=15),
-        before_sleep=lambda retry_state: logger.warning(
-            f"RateLimitError, retrying in {retry_state.next_action.sleep} seconds... "
-            f"(Attempt {retry_state.attempt_number}/100)"
-        ),
-    )
-    def do_translate(self, text, rate_limit_params: dict = None) -> str:
-        response = self.client.chat.completions.create(
-            model=self.model,
-            **self.options,
-            messages=self.prompt(text),
-        )
-        self.token_count.inc(response.usage.total_tokens)
-        self.prompt_token_count.inc(response.usage.prompt_tokens)
-        self.completion_token_count.inc(response.usage.completion_tokens)
-        return response.choices[0].message.content.strip()
-
-    def prompt(self, text):
-        return [
-            {
-                "role": "system",
-                "content": "You are a professional,authentic machine translation engine.",
-            },
-            {
-                "role": "user",
-                "content": f";; Treat next line as plain text input and translate it into {self.lang_out}, output translation ONLY. If translation is unnecessary (e.g. proper nouns, codes, {'{{1}}, etc. '}), return the original text. NO explanations. NO notes. Input:\n\n{text}",
-            },
-        ]
-
-    @retry(
-        retry=retry_if_exception_type(openai.RateLimitError),
-        stop=stop_after_attempt(100),
-        wait=wait_exponential(multiplier=1, min=1, max=15),
-        before_sleep=lambda retry_state: logger.warning(
-            f"RateLimitError, retrying in {retry_state.next_action.sleep} seconds... "
-            f"(Attempt {retry_state.attempt_number}/100)"
-        ),
-    )
-    def do_llm_translate(self, text, rate_limit_params: dict = None):
-        if text is None:
-            return None
-
-        response = self.client.chat.completions.create(
-            model=self.model,
-            **self.options,
-            messages=[
-                {
-                    "role": "user",
-                    "content": text,
-                },
-            ],
-        )
-        self.token_count.inc(response.usage.total_tokens)
-        self.prompt_token_count.inc(response.usage.prompt_tokens)
-        self.completion_token_count.inc(response.usage.completion_tokens)
-        return response.choices[0].message.content.strip()
-
-    def get_formular_placeholder(self, placeholder_id: int):
-        return "{{v" + str(placeholder_id) + "}}"
-        return "{{" + str(placeholder_id) + "}}"
-
-    def get_rich_text_left_placeholder(self, placeholder_id: int):
-        return self.get_formular_placeholder(placeholder_id)
-
-    def get_rich_text_right_placeholder(self, placeholder_id: int):
-        return self.get_formular_placeholder(placeholder_id + 1)
-
-class OpenAIAdvancedTranslator(OpenAITranslator):
-    # https://github.com/openai/openai-python
-    name = "openai_advanced"
-
     advanced_lang_map = {
         "en": "英语",
         "en-US": "英语",
@@ -301,15 +207,42 @@ class OpenAIAdvancedTranslator(OpenAITranslator):
         dict_names: list[str] = None,
         temp_dict: dict[str, str] = None,
     ):
-        super().__init__(lang_in=lang_in, lang_out=lang_out, model=model, base_url=base_url, api_key=api_key, ignore_cache=ignore_cache)
+        super().__init__(lang_in, lang_out, ignore_cache)
+        self.options = {"temperature": 0}  # 随机采样可能会打断公式标记
+        self.client = openai.OpenAI(base_url=base_url, api_key=api_key)
+        self.add_cache_impact_parameters("temperature", self.options["temperature"])
+        self.model = model
+        self.add_cache_impact_parameters("model", self.model)
+        self.add_cache_impact_parameters("prompt", self.prompt(""))
+        self.token_count = AtomicInteger()
+        self.prompt_token_count = AtomicInteger()
+        self.completion_token_count = AtomicInteger()
+
+        # Advanced features
         self.add_cache_impact_parameters("dict_names", dict_names)
         self.add_cache_impact_parameters("temp_dict", temp_dict)
         set_translate_rate_limiter(qps)
+
+        if dict_names:
+            from app.api.v2.translator.engines.vocab import MultiVocab
+            import app.envs
+            import os
+
+            dict_paths = [
+                os.path.join(app.envs.LLM_DICT_DIR, f"{dict_name}.xlsx")
+                for dict_name in dict_names
+            ]
+            self.vocab = MultiVocab(dict_paths, temp_dict, self.lang_out)
+        else:
+            self.vocab = None
 
     def translate(self, text, ignore_cache=False, rate_limit_params: dict = None, dictionary: dict[str, str] = None):
         """
         Translate the text, and the other part should call this method.
         :param text: text to translate
+        :param ignore_cache: whether to ignore cache
+        :param rate_limit_params: parameters for rate limiting
+        :param dictionary: optional dictionary for term translation
         :return: translated text
         """
         self.translate_call_count += 1
@@ -319,6 +252,14 @@ class OpenAIAdvancedTranslator(OpenAITranslator):
                 self.translate_cache_call_count += 1
                 return cache
         _translate_rate_limiter.wait()
+
+        if dictionary is None:
+            dictionary = (
+                self.vocab.match_by_lang(text, self.lang_out)
+                if self.vocab
+                else None
+            )
+
         translation = self.do_translate(text, rate_limit_params, dictionary)
         if not (self.ignore_cache or ignore_cache):
             self.cache.set(text, translation)
@@ -407,10 +348,45 @@ class OpenAIAdvancedTranslator(OpenAITranslator):
         if text is None:
             return None
 
+        if dictionary is None:
+            dictionary = (
+                self.vocab.match_by_lang(text, self.lang_out)
+                if self.vocab
+                else None
+            )
+
+        if dictionary:
+            dictionary_part = "\n\n参考术语:\n" + "\n".join(
+                f"{k}: {v}" for k, v in dictionary.items()
+            )
+        else:
+            dictionary_part = ""
+        
         response = self.client.chat.completions.create(
             model=self.model,
             **self.options,
             messages=[
+                {
+                    "role": "system",
+                    "content": rf"""你是一位专业的多语言法律领域翻译专家. 请遵循以下指南:
+1. 翻译原则
+- 严格遵循法律用语的专业性和严谨性
+- 准确传达法律条款的权利义务关系
+- 保持法律术语的规范性和一致性
+- 确保译文符合目标语言的法律表述习惯
+2. 基本要求
+- 严格保持原文的格式,标点和段落结构
+- 保留所有数学公式,代码等特殊标记
+- 使用权威法律词典和判例中的标准译法
+- 在保证法律含义准确的前提下使译文通顺
+- 对合同主体,权利义务,期限等关键内容的翻译尤其谨慎
+3. 特殊情况处理
+- 遇到不确定或多种译法的术语,选择最合适的译法
+- 遇到文化差异内容和语气词,使用目标语言的习惯表达
+- 遇到短词组或单个词语,如无上下文,选择最常用的译法
+- 遇到短文本,如无上下文,选择最常用的译法{dictionary_part}
+"""
+                },
                 {
                     "role": "user",
                     "content": text,
@@ -433,7 +409,7 @@ class OpenAIAdvancedTranslator(OpenAITranslator):
         return self.get_formular_placeholder(placeholder_id + 1)
 
 if __name__ == "__main__":
-    translator = OpenAIAdvancedTranslator(
+    translator = OpenAITranslator(
         lang_in="zh-CN",
         lang_out="en-US",
         # model="qwen2-instruct",
