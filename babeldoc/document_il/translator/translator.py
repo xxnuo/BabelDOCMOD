@@ -222,6 +222,7 @@ class OpenAITranslator(BaseTranslator):
         self.ignore_cache = ignore_cache
         self.add_cache_impact_parameters("dict_names", dict_names)
         self.add_cache_impact_parameters("temp_dict", temp_dict)
+        self.add_cache_impact_parameters("ignore_cache", ignore_cache)
         set_translate_rate_limiter(qps)
 
         from app.api.v2.translator.engines.vocab import MultiVocab
