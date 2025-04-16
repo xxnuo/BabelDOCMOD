@@ -224,11 +224,11 @@ class OpenAITranslator(BaseTranslator):
         self.add_cache_impact_parameters("temp_dict", temp_dict)
         set_translate_rate_limiter(qps)
 
-        if dict_names:
-            from app.api.v2.translator.engines.vocab import MultiVocab
-            import app.envs
-            import os
+        from app.api.v2.translator.engines.vocab import MultiVocab
+        import app.envs
+        import os
 
+        if dict_names:
             dict_paths = [
                 os.path.join(app.envs.LLM_DICT_DIR, f"{dict_name}.xlsx")
                 for dict_name in dict_names
@@ -254,12 +254,11 @@ class OpenAITranslator(BaseTranslator):
                 return cache
         _translate_rate_limiter.wait()
 
-        if dictionary is None:
-            dictionary = (
-                self.vocab.match_by_lang(text, self.lang_out)
-                if self.vocab
-                else None
-            )
+        dictionary = (
+            self.vocab.match_by_lang(text, self.lang_out)
+            if self.vocab
+            else None
+        )
 
         translation = self.do_translate(text, rate_limit_params, dictionary)
         if not (self.ignore_cache or ignore_cache):
@@ -349,14 +348,11 @@ class OpenAITranslator(BaseTranslator):
         if text is None:
             return None
 
-        print(text)
-
-        # if dictionary is None:
-        #     dictionary = (
-        #         self.vocab.match_by_lang(text, self.lang_out)
-        #         if self.vocab
-        #         else None
-        #     )
+        dictionary = (
+            self.vocab.match_by_lang(text, self.lang_out)
+            if self.vocab
+            else None
+        )
 
         if dictionary:
             dictionary_part = "\n\n参考术语:\n" + "\n".join(
