@@ -1,3 +1,4 @@
+from string import Template
 import contextlib
 import logging
 import threading
@@ -238,7 +239,13 @@ class OpenAITranslator(BaseTranslator):
         else:
             self.vocab = None
 
-    def translate(self, text, ignore_cache=False, rate_limit_params: dict = None, dictionary: dict[str, str] = None):
+    def translate(
+        self,
+        text,
+        ignore_cache=False,
+        rate_limit_params: dict = None,
+        dictionary: dict[str, str] = None,
+    ):
         """
         Translate the text, and the other part should call this method.
         :param text: text to translate
@@ -256,9 +263,7 @@ class OpenAITranslator(BaseTranslator):
         _translate_rate_limiter.wait()
 
         dictionary = (
-            self.vocab.match_by_lang(text, self.lang_out)
-            if self.vocab
-            else None
+            self.vocab.match_by_lang(text, self.lang_out) if self.vocab else None
         )
 
         translation = self.do_translate(text, rate_limit_params, dictionary)
@@ -275,7 +280,9 @@ class OpenAITranslator(BaseTranslator):
             f"(Attempt {retry_state.attempt_number}/100)"
         ),
     )
-    def do_translate(self, text, rate_limit_params: dict = None, dictionary: dict[str, str] = None) -> str:
+    def do_translate(
+        self, text, rate_limit_params: dict = None, dictionary: dict[str, str] = None
+    ) -> str:
         response = self.client.chat.completions.create(
             model=self.model,
             **self.options,
@@ -303,37 +310,51 @@ class OpenAITranslator(BaseTranslator):
             )
         else:
             dictionary_part = ""
-        
+
+        #         return [
+        #             {
+        #                 "role": "system",
+        #                 "content": rf"""你是一位专业的多语言法律领域翻译专家. 请遵循以下指南:
+        # 1. 翻译原则
+        # - 严格遵循法律用语的专业性和严谨性
+        # - 准确传达法律条款的权利义务关系
+        # - 保持法律术语的规范性和一致性
+        # - 确保译文符合目标语言的法律表述习惯
+        # 2. 基本要求
+        # - 严格保持原文的格式,标点和段落结构
+        # - 保留所有数学公式,代码等特殊标记
+        # - 使用权威法律词典和判例中的标准译法
+        # - 在保证法律含义准确的前提下使译文通顺
+        # - 对合同主体,权利义务,期限等关键内容的翻译尤其谨慎
+        # 3. 特殊情况处理
+        # - 遇到不确定或多种译法的术语,选择最合适的译法
+        # - 遇到文化差异内容和语气词,使用目标语言的习惯表达
+        # - 遇到短词组或单个词语,如无上下文,选择最常用的译法
+        # - 遇到短文本,如无上下文,选择最常用的译法{dictionary_part}
+        # """,
+        #             },
+        #             {
+        #                 "role": "user",
+        #                 "content": f";; 将用户在下一行输入的{in_lang_part}内容翻译成{out_lang_part}.仅输出译文,如果是不必要的翻译(例如专有名词、代码、{'{{1}}, 等'}),返回原文.不要解释,不要备注.输入内容:",
+        #             },
+        #             {
+        #                 "role": "user",
+        #                 "content": text,
+        #             },
+        #         ]
+        debug_t = Template(open("./debug_prompt.txt").read())
+        debug_content = debug_t.substitute(
+            in_lang=self.lang_in,
+            out_lang=self.lang_out,
+            text=text,
+            dictionary=dictionary_part,
+        )
+        print(debug_content)
         return [
             {
-                "role": "system",
-                "content": rf"""你是一位专业的多语言法律领域翻译专家. 请遵循以下指南:
-1. 翻译原则
-- 严格遵循法律用语的专业性和严谨性
-- 准确传达法律条款的权利义务关系
-- 保持法律术语的规范性和一致性
-- 确保译文符合目标语言的法律表述习惯
-2. 基本要求
-- 严格保持原文的格式,标点和段落结构
-- 保留所有数学公式,代码等特殊标记
-- 使用权威法律词典和判例中的标准译法
-- 在保证法律含义准确的前提下使译文通顺
-- 对合同主体,权利义务,期限等关键内容的翻译尤其谨慎
-3. 特殊情况处理
-- 遇到不确定或多种译法的术语,选择最合适的译法
-- 遇到文化差异内容和语气词,使用目标语言的习惯表达
-- 遇到短词组或单个词语,如无上下文,选择最常用的译法
-- 遇到短文本,如无上下文,选择最常用的译法{dictionary_part}
-""",
-            },
-            {
                 "role": "user",
-                "content": f";; 将用户在下一行输入的{in_lang_part}内容翻译成{out_lang_part}.仅输出译文,如果是不必要的翻译(例如专有名词、代码、{'{{1}}, 等'}),返回原文.不要解释,不要备注.输入内容:",
-            },
-            {
-                "role": "user",
-                "content": text,
-            },
+                "content": debug_content,
+            }
         ]
 
     @retry(
@@ -345,14 +366,21 @@ class OpenAITranslator(BaseTranslator):
             f"(Attempt {retry_state.attempt_number}/100)"
         ),
     )
-    def do_llm_translate(self, text, rate_limit_params: dict = None, dictionary: dict[str, str] = None):
+    def do_llm_translate(
+        self, text, rate_limit_params: dict = None, dictionary: dict[str, str] = None
+    ):
         if text is None:
             return None
 
-        dictionary = (
-            self.vocab.match_by_lang(text, self.lang_out)
-            if self.vocab
-            else None
+        is_auto_lang = self.lang_in == ""
+        in_lang_part = (
+            "任何" if is_auto_lang else f"{self.advanced_lang_map[self.lang_in]}"
+        )
+        # 生成非目标语言处理说明
+        out_lang_part = (
+            f"{self.advanced_lang_map[self.lang_out]}"
+            if is_auto_lang
+            else f"{self.advanced_lang_map[self.lang_out]}, 源文本中非{self.advanced_lang_map[self.lang_in]}的部分内容直接使用原文作为译文"
         )
 
         if dictionary:
@@ -360,37 +388,59 @@ class OpenAITranslator(BaseTranslator):
                 f"{k}: {v}" for k, v in dictionary.items()
             )
         else:
-            dictionary_part = ""
-        
+            dictionary = (
+                self.vocab.match_by_lang(text, self.lang_out) if self.vocab else None
+            )
+            if dictionary:
+                dictionary_part = "\n\n参考术语:\n" + "\n".join(
+                    f"{k}: {v}" for k, v in dictionary.items()
+                )
+            else:
+                dictionary_part = ""
+
+        debug_t = Template(open("./debug_prompt.txt").read())
+        debug_content = debug_t.substitute(
+            in_lang=self.lang_in,
+            out_lang=self.lang_out,
+            text=text,
+            dictionary=dictionary_part,
+        )
+        print(debug_content)
         response = self.client.chat.completions.create(
             model=self.model,
             **self.options,
+            #             messages=[
+            #                 {
+            #                     "role": "system",
+            #                     "content": rf"""你是一位专业的多语言法律领域翻译专家. 请遵循以下指南:
+            # 1. 翻译原则
+            # - 严格遵循法律用语的专业性和严谨性
+            # - 准确传达法律条款的权利义务关系
+            # - 保持法律术语的规范性和一致性
+            # - 确保译文符合目标语言的法律表述习惯
+            # 2. 基本要求
+            # - 严格保持原文的格式,标点和段落结构
+            # - 保留所有数学公式,代码等特殊标记
+            # - 使用权威法律词典和判例中的标准译法
+            # - 在保证法律含义准确的前提下使译文通顺
+            # - 对合同主体,权利义务,期限等关键内容的翻译尤其谨慎
+            # 3. 特殊情况处理
+            # - 遇到不确定或多种译法的术语,选择最合适的译法
+            # - 遇到文化差异内容和语气词,使用目标语言的习惯表达
+            # - 遇到短词组或单个词语,如无上下文,选择最常用的译法
+            # - 遇到短文本,如无上下文,选择最常用的译法{dictionary_part}
+            # """,
+            #                 },
+            #                 {
+            #                     "role": "user",
+            #                     "content": text,
+            #                 },
+            #             ],
             messages=[
                 {
-                    "role": "system",
-                    "content": rf"""你是一位专业的多语言法律领域翻译专家. 请遵循以下指南:
-1. 翻译原则
-- 严格遵循法律用语的专业性和严谨性
-- 准确传达法律条款的权利义务关系
-- 保持法律术语的规范性和一致性
-- 确保译文符合目标语言的法律表述习惯
-2. 基本要求
-- 严格保持原文的格式,标点和段落结构
-- 保留所有数学公式,代码等特殊标记
-- 使用权威法律词典和判例中的标准译法
-- 在保证法律含义准确的前提下使译文通顺
-- 对合同主体,权利义务,期限等关键内容的翻译尤其谨慎
-3. 特殊情况处理
-- 遇到不确定或多种译法的术语,选择最合适的译法
-- 遇到文化差异内容和语气词,使用目标语言的习惯表达
-- 遇到短词组或单个词语,如无上下文,选择最常用的译法
-- 遇到短文本,如无上下文,选择最常用的译法{dictionary_part}
-"""
-                },
-                {
                     "role": "user",
-                    "content": text,
-                },
+                    "content": debug_content,
+                }
             ],
         )
         self.token_count.inc(response.usage.total_tokens)
@@ -407,6 +457,7 @@ class OpenAITranslator(BaseTranslator):
 
     def get_rich_text_right_placeholder(self, placeholder_id: int):
         return self.get_formular_placeholder(placeholder_id + 1)
+
 
 if __name__ == "__main__":
     translator = OpenAITranslator(
