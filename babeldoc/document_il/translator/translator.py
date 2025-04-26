@@ -342,19 +342,31 @@ class OpenAITranslator(BaseTranslator):
         #                 "content": text,
         #             },
         #         ]
-        debug_t = Template(open("./debug_prompt.txt").read())
-        debug_content = debug_t.substitute(
+        debug_system_t = Template(open("./debug_system.txt").read())
+        debug_system_content = debug_system_t.substitute(
             in_lang=self.lang_in,
             out_lang=self.lang_out,
             text=text,
             dictionary=dictionary_part,
         )
-        print(debug_content)
+        print(debug_system_content)
+        debug_user_t = Template(open("./debug_user.txt").read())
+        debug_user_content = debug_user_t.substitute(
+            in_lang=self.lang_in,
+            out_lang=self.lang_out,
+            text=text,
+            dictionary=dictionary_part,
+        )
+        print(debug_user_content)
         return [
             {
+                "role": "system",
+                "content": debug_system_content,
+            },
+            {
                 "role": "user",
-                "content": debug_content,
-            }
+                "content": debug_user_content,
+            },
         ]
 
     @retry(
@@ -398,14 +410,22 @@ class OpenAITranslator(BaseTranslator):
             else:
                 dictionary_part = ""
 
-        debug_t = Template(open("./debug_prompt.txt").read())
-        debug_content = debug_t.substitute(
+        debug_system_t = Template(open("./debug_system.txt").read())
+        debug_system_content = debug_system_t.substitute(
             in_lang=self.lang_in,
             out_lang=self.lang_out,
             text=text,
             dictionary=dictionary_part,
         )
-        print(debug_content)
+        print(debug_system_content)
+        debug_user_t = Template(open("./debug_user.txt").read())
+        debug_user_content = debug_user_t.substitute(
+            in_lang=self.lang_in,
+            out_lang=self.lang_out,
+            text=text,
+            dictionary=dictionary_part,
+        )
+        print(debug_user_content)
         response = self.client.chat.completions.create(
             model=self.model,
             **self.options,
@@ -438,9 +458,13 @@ class OpenAITranslator(BaseTranslator):
             #             ],
             messages=[
                 {
+                    "role": "system",
+                    "content": debug_system_content,
+                },
+                {
                     "role": "user",
-                    "content": debug_content,
-                }
+                    "content": debug_user_content,
+                },
             ],
         )
         self.token_count.inc(response.usage.total_tokens)
