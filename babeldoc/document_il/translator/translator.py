@@ -213,11 +213,13 @@ class OpenAITranslator(BaseTranslator):
         super().__init__(lang_in, lang_out, ignore_cache)
         self.options = {
             "temperature": 0.0,
-            "repetition_penalty": 1.1,
             "top_p": 0.8,
             "top_k": 20,
             "min_p": 0.0,
-            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}}
+            "extra_body": {
+                "repetition_penalty": 1.1,
+                "chat_template_kwargs": {"enable_thinking": False},
+            }
             if app.envs.LLM_EXTRA_BODY
             else None,
         }  # 随机采样可能会打断公式标记
