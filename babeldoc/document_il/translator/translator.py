@@ -257,6 +257,9 @@ class OpenAITranslator(BaseTranslator):
         rate_limit_params: dict = None,
         dictionary: dict[str, str] = None,
     ):
+        if not text or text.strip() == "":
+            return ""
+
         self.translate_call_count += 1
         if not (self.ignore_cache or ignore_cache):
             cache = self.cache.get(text)
@@ -306,6 +309,9 @@ class OpenAITranslator(BaseTranslator):
         return response.choices[0].message.content.strip()
 
     def prompt(self, text, dictionary: dict[str, str] = None):
+        if not text or text.strip() == "":
+            return []
+
         is_auto_lang = self.lang_in == ""
         in_lang_part = (
             "any" if is_auto_lang else f"{self.advanced_lang_map[self.lang_in]}"
@@ -401,8 +407,8 @@ Instructions:
     def do_llm_translate(
         self, text, rate_limit_params: dict = None, dictionary: dict[str, str] = None
     ):
-        if text is None:
-            return None
+        if not text or text.strip() == "":
+            return ""
 
         is_auto_lang = self.lang_in == ""
         in_lang_part = (
