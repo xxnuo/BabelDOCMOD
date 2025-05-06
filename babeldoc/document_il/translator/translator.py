@@ -214,9 +214,9 @@ class OpenAITranslator(BaseTranslator):
         self.options = {
             "temperature": 0.0,
             "top_p": 0.8,
-            "top_k": 20,
-            "min_p": 0.0,
             "extra_body": {
+                "top_k": 20,
+                "min_p": 0.0,
                 "repetition_penalty": 1.1,
                 "chat_template_kwargs": {"enable_thinking": False},
             }
@@ -502,3 +502,24 @@ Use the following terminology when matches usr input:
         )
         self.update_token_count(response)
         return response.choices[0].message.content.strip()
+
+    def update_token_count(self, response):
+        try:
+            if response.usage and response.usage.total_tokens:
+                self.token_count.inc(response.usage.total_tokens)
+            if response.usage and response.usage.prompt_tokens:
+                self.prompt_token_count.inc(response.usage.prompt_tokens)
+            if response.usage and response.usage.completion_tokens:
+                self.completion_token_count.inc(response.usage.completion_tokens)
+        except Exception as e:
+            logger.exception("Error updating token count")
+
+    def get_formular_placeholder(self, placeholder_id: int):
+        return "{{v" + str(placeholder_id) + "}}"
+        return "{{" + str(placeholder_id) + "}}"
+
+    def get_rich_text_left_placeholder(self, placeholder_id: int):
+        return f"<style id='{placeholder_id}'>"
+
+    def get_rich_text_right_placeholder(self, placeholder_id: int):
+        return "</style>"
