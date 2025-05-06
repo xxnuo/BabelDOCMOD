@@ -418,7 +418,9 @@ Instructions:
             dictionary_part = "\n".join(f"{k}: {v}" for k, v in dictionary.items())
         else:
             dictionary = (
-                self.vocab.match_by_lang(text, self.lang_out) if self.vocab else None
+                self.vocab.match_by_lang(text, self.lang_out)
+                if hasattr(self, "vocab") and self.vocab
+                else None
             )
             if dictionary:
                 # dictionary_part = "\n\n参考术语:\n" + "\n".join(
